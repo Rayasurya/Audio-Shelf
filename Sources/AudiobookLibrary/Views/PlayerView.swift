@@ -17,6 +17,7 @@ struct PlayerView: View {
     let onSetRate: (Float) -> Void
     let onSeek: (TimeInterval) -> Void
     let onFocus: () -> Void
+    let onRegenerate: () -> Void
 
     @State private var pane: PlayerPane = .chapters
 
@@ -78,18 +79,32 @@ struct PlayerView: View {
             .padding(28)
             .background(AppPalette.sea)
 
-            VStack(spacing: 26) {
-                VStack(spacing: 7) {
-                    Text(currentChapter?.title ?? "Beginning")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .tracking(1.2)
-                        .foregroundStyle(AppPalette.copper)
-                    Text("Chapter \(currentChapter?.index ?? 1)")
-                        .font(.system(size: 32, weight: .bold, design: .serif))
+            VStack(spacing: 30) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text(currentChapter?.title.uppercased() ?? "BEGINNING")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .tracking(1.3)
+                            .foregroundStyle(AppPalette.copper)
+                            .lineLimit(1)
+                        Text("Chapter \(currentChapter?.index ?? 1)")
+                            .font(.system(size: 24, weight: .bold, design: .serif))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .layoutPriority(1)
+                    }
+                    Spacer()
+                    Picker("View", selection: $pane) {
+                        ForEach(PlayerPane.allCases, id: \.self) { pane in
+                            Text(pane.rawValue).tag(pane)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
 
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Slider(
                         value: Binding(
                             get: { min(currentSeconds, totalSeconds) },
@@ -98,6 +113,7 @@ struct PlayerView: View {
                         in: 0 ... totalSeconds
                     )
                     .tint(AppPalette.copper)
+                    .controlSize(.large)
                     HStack {
                         Text(formatDuration(currentSeconds))
                         Spacer()
@@ -107,17 +123,18 @@ struct PlayerView: View {
                     .foregroundStyle(AppPalette.mist.opacity(0.66))
                 }
 
-                HStack(spacing: 30) {
+                HStack(spacing: 34) {
                     Button { onSeek(max(0, currentSeconds - 15)) } label: {
                         Image(systemName: "gobackward.15")
                     }
                     .buttonStyle(.plain)
                     Button(action: onToggle) {
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 28, weight: .bold))
-                            .frame(width: 70, height: 70)
+                            .font(.system(size: 26, weight: .bold))
+                            .frame(width: 64, height: 64)
                     }
                     .buttonStyle(.plain)
+                    .keyboardShortcut(.space, modifiers: [])
                     .foregroundStyle(AppPalette.ink)
                     .background(AppPalette.copper, in: Circle())
                     Button { onSeek(min(totalSeconds, currentSeconds + 30)) } label: {
@@ -126,16 +143,12 @@ struct PlayerView: View {
                     .buttonStyle(.plain)
                 }
                 .font(.system(size: 22, weight: .medium))
+                .frame(maxWidth: .infinity)
 
-                VStack(spacing: 5) {
-                    HStack {
-                        Text("Speed")
-                        Spacer()
-                        Text("\(String(format: "%.2f", playbackRate))×")
-                            .monospacedDigit()
-                            .foregroundStyle(AppPalette.copper)
-                    }
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                HStack(spacing: 14) {
+                    Text("Speed")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppPalette.mist.opacity(0.7))
                     Slider(
                         value: Binding(
                             get: { Double(playbackRate) },
@@ -143,35 +156,26 @@ struct PlayerView: View {
                         ),
                         in: 0.5 ... 3.0,
                         step: 0.05
-                    ) {
-                        Text("Playback speed")
-                    } minimumValueLabel: {
-                        Text("0.5×").font(.caption2)
-                    } maximumValueLabel: {
-                        Text("3×").font(.caption2)
-                    }
+                    )
+                    .labelsHidden()
                     .tint(AppPalette.copper)
-                    .controlSize(.small)
+                    Text("\(String(format: "%.2f", playbackRate))×")
+                        .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(AppPalette.copper)
+                        .frame(width: 46, alignment: .trailing)
                 }
-                .frame(maxWidth: 340)
-                .foregroundStyle(AppPalette.mist.opacity(0.85))
-                Divider().overlay(AppPalette.mist.opacity(0.16))
-                Picker("View", selection: $pane) {
-                    ForEach(PlayerPane.allCases, id: \.self) { pane in
-                        Text(pane.rawValue).tag(pane)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 260)
+
+                Divider().overlay(AppPalette.mist.opacity(0.14))
+
                 switch pane {
                 case .chapters:
                     ChapterTimeline(book: book, currentSeconds: currentSeconds, onSeek: onSeek)
                 case .text:
-                    ReadAlongView(book: book, timings: timings, currentSeconds: currentSeconds, onSeek: onSeek)
+                    LyricsFlowView(book: book, timings: timings, currentSeconds: currentSeconds, onSeek: onSeek, onRegenerate: onRegenerate)
                 }
             }
-            .padding(42)
+            .padding(.horizontal, 46)
+            .padding(.vertical, 34)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .foregroundStyle(AppPalette.paper)
@@ -192,7 +196,7 @@ struct ChapterTimeline: View {
                 .tracking(1.2)
                 .foregroundStyle(AppPalette.mist.opacity(0.62))
             ScrollView {
-                LazyVStack(spacing: 5) {
+                VStack(spacing: 5) {
                     ForEach(Array(zip(book.narratedChapters, starts)), id: \.0.id) { chapter, start in
                         Button {
                             onSeek(start)
@@ -225,79 +229,168 @@ struct ChapterTimeline: View {
     }
 }
 
-// Shows the current chapter's text while listening. With a timing manifest,
-// the chunk being narrated is highlighted and tappable to seek; without one
-// (books generated before timings existed) it is plain readable text.
-struct ReadAlongView: View {
+// One narrated line with its absolute position in the book's audio.
+struct LyricLine: Identifiable, Equatable {
+    let id: Int
+    let text: String
+    let start: TimeInterval
+    let end: TimeInterval
+}
+
+func lyricLines(book: Audiobook, timings: BookTimings?) -> [LyricLine] {
+    guard let timings else { return [] }
+    let narrated = book.narratedChapters
+    let starts = chapterStartTimes(chapters: narrated)
+    let startByIndex = Dictionary(uniqueKeysWithValues: zip(narrated.map(\.index), starts))
+    var lines: [LyricLine] = []
+    for chapter in timings.chapters {
+        guard let chapterStart = startByIndex[chapter.index] else { continue }
+        for timing in chapter.timings {
+            lines.append(LyricLine(
+                id: lines.count,
+                text: timing.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                start: chapterStart + timing.start,
+                end: chapterStart + timing.end
+            ))
+        }
+    }
+    return lines
+}
+
+func currentLyricIndex(_ lines: [LyricLine], currentSeconds: TimeInterval) -> Int? {
+    guard !lines.isEmpty else { return nil }
+    return lines.lastIndex(where: { $0.start <= currentSeconds }) ?? 0
+}
+
+// Apple Music-style flowing lyrics: the narrated line is large and bright,
+// its neighbors recede; the view drifts with the voice; tapping a line seeks.
+struct LyricsFlowView: View {
     let book: Audiobook
     let timings: BookTimings?
     let currentSeconds: TimeInterval
     let onSeek: (TimeInterval) -> Void
-
-    private var currentChapterInfo: (chapter: Chapter, start: TimeInterval)? {
-        let starts = chapterStartTimes(chapters: book.narratedChapters)
-        return Array(zip(book.narratedChapters, starts)).last(where: { _, start in start <= currentSeconds })
-    }
+    var onRegenerate: (() -> Void)?
+    var emphasisSize: CGFloat = 24
+    var baseSize: CGFloat = 17
 
     var body: some View {
-        if let info = currentChapterInfo {
-            let chunkTimings = timings?.chapters.first(where: { $0.index == info.chapter.index })?.timings ?? []
+        let lines = lyricLines(book: book, timings: timings)
+        if lines.isEmpty {
+            fallbackReader
+        } else {
+            let current = currentLyricIndex(lines, currentSeconds: currentSeconds)
             ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(info.chapter.title)
-                            .font(.system(size: 15, weight: .bold, design: .serif))
-                            .foregroundStyle(AppPalette.mist.opacity(0.85))
-                        if chunkTimings.isEmpty {
-                            Text(info.chapter.text)
-                                .font(.system(size: 15, design: .serif))
-                                .lineSpacing(5)
-                                .textSelection(.enabled)
-                        } else {
-                            ForEach(Array(chunkTimings.enumerated()), id: \.offset) { index, chunk in
-                                let isCurrent = isCurrentChunk(chunk, chapterStart: info.start)
-                                Text(chunk.text)
-                                    .font(.system(size: 15, design: .serif))
-                                    .lineSpacing(5)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 5)
-                                    .foregroundStyle(isCurrent ? AppPalette.paper : AppPalette.paper.opacity(0.62))
-                                    .background(
-                                        isCurrent ? AppPalette.copper.opacity(0.22) : .clear,
-                                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    )
-                                    .id(index)
-                                    .onTapGesture { onSeek(info.start + chunk.start) }
-                                    .contextMenu { WordLookupMenu(text: chunk.text) }
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.trailing, 8)
+                ScrollView(showsIndicators: false) {
+                    LyricLinesStack(
+                        lines: lines,
+                        currentIndex: current,
+                        emphasisSize: emphasisSize,
+                        baseSize: baseSize,
+                        onSeek: onSeek
+                    )
                 }
-                .onChange(of: currentChunkIndex(chunkTimings, chapterStart: info.start)) { _, newIndex in
+                .onChange(of: current) { _, newIndex in
                     if let newIndex {
-                        withAnimation(.easeInOut(duration: 0.25)) {
+                        withAnimation(.easeInOut(duration: 0.35)) {
                             proxy.scrollTo(newIndex, anchor: .center)
                         }
                     }
                 }
+                .onAppear {
+                    if let current { proxy.scrollTo(current, anchor: .center) }
+                }
             }
-        } else {
-            Text("Start playing to follow the text.")
-                .foregroundStyle(AppPalette.mist.opacity(0.6))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    private func isCurrentChunk(_ chunk: ChunkTiming, chapterStart: TimeInterval) -> Bool {
-        let absoluteStart = chapterStart + chunk.start
-        let absoluteEnd = chapterStart + chunk.end
-        return absoluteStart <= currentSeconds && currentSeconds < absoluteEnd
+    // Books generated before timing manifests existed: name the problem, offer
+    // the fix, and stay readable meanwhile. Never a silent fallback.
+    private var fallbackReader: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("This book predates read-along.")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                    Text("Its audio has no sentence timings, so lyrics can't sync. Regenerating adds them.")
+                        .font(.system(size: 12, design: .rounded))
+                        .opacity(0.8)
+                }
+                Spacer()
+                if let onRegenerate {
+                    Button("Regenerate for read-along", action: onRegenerate)
+                        .buttonStyle(PrimaryButtonStyle())
+                }
+            }
+            .padding(12)
+            .foregroundStyle(AppPalette.paper)
+            .background(AppPalette.copper.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(AppPalette.copper.opacity(0.5), lineWidth: 1)
+            }
+            LyricsFallbackReader(book: book, currentSeconds: currentSeconds)
+        }
     }
+}
 
-    private func currentChunkIndex(_ chunks: [ChunkTiming], chapterStart: TimeInterval) -> Int? {
-        chunks.firstIndex(where: { isCurrentChunk($0, chapterStart: chapterStart) })
+// The flowing lines themselves — separate from the ScrollView so they can be
+// rendered headlessly for layout verification.
+struct LyricLinesStack: View {
+    let lines: [LyricLine]
+    let currentIndex: Int?
+    let emphasisSize: CGFloat
+    let baseSize: CGFloat
+    let onSeek: (TimeInterval) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            Color.clear.frame(height: 60)
+            ForEach(lines) { line in
+                let isCurrent = line.id == currentIndex
+                Text(line.text)
+                    .font(.system(size: isCurrent ? emphasisSize : baseSize, weight: isCurrent ? .bold : .medium, design: .serif))
+                    .foregroundStyle(isCurrent ? AppPalette.paper : AppPalette.paper.opacity(0.32))
+                    .lineSpacing(isCurrent ? 7 : 4)
+                    .blur(radius: isCurrent ? 0 : 0.4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .id(line.id)
+                    .onTapGesture { onSeek(line.start) }
+                    .contextMenu { WordLookupMenu(text: line.text) }
+            }
+            Color.clear.frame(height: 120)
+        }
+        .animation(.easeInOut(duration: 0.3), value: currentIndex)
+    }
+}
+
+struct LyricsFallbackReader: View {
+    let book: Audiobook
+    let currentSeconds: TimeInterval
+
+    var body: some View {
+        let narrated = book.narratedChapters
+        let starts = chapterStartTimes(chapters: narrated)
+        let info = Array(zip(narrated, starts)).last(where: { _, start in start <= currentSeconds })
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Generated before read-along existed — regenerate this book to get flowing lyrics.")
+                    .font(.caption)
+                    .foregroundStyle(AppPalette.mist.opacity(0.55))
+                if let info {
+                    Text(info.0.title)
+                        .font(.system(size: 16, weight: .bold, design: .serif))
+                        .foregroundStyle(AppPalette.mist.opacity(0.9))
+                    Text(info.0.text)
+                        .font(.system(size: 15, design: .serif))
+                        .lineSpacing(6)
+                        .foregroundStyle(AppPalette.paper.opacity(0.85))
+                        .textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 

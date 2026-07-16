@@ -1,7 +1,22 @@
 import SwiftUI
 
 struct RootView: View {
-    @State private var store = AppStore()
+    @Bindable var store: AppStore
+    @State private var detailsBookID: UUID?
+
+    private var actions: BookActions {
+        BookActions(
+            onPlay: store.openPlayer,
+            onReview: { store.dispatch(.navigate(.preparation($0))) },
+            onProgress: store.openGenerationProgress,
+            onResume: store.resumeGeneration,
+            onRegenerate: { store.beginGeneration(bookID: $0) },
+            onDetails: { detailsBookID = $0 },
+            onExport: store.exportAudiobook,
+            onRevealFiles: store.revealBookFiles,
+            onRemove: store.requestRemoval
+        )
+    }
 
     var body: some View {
         @Bindable var store = store
@@ -13,7 +28,11 @@ struct RootView: View {
                 isPlaying: store.isPlaying,
                 onToggle: store.togglePlayback,
                 onSeek: store.seek,
-                onExit: { store.isFocusMode = false }
+                onExit: { store.isFocusMode = false },
+                onRegenerate: {
+                    store.isFocusMode = false
+                    store.beginGeneration(bookID: bookID)
+                }
             )
         } else {
             mainWindow(store: store)
@@ -35,7 +54,8 @@ struct RootView: View {
                         store.dispatch(.navigate(.library))
                     }
                 },
-                onImport: store.chooseAndImport
+                onImport: store.chooseAndImport,
+                actions: actions
             )
             .navigationSplitViewColumnWidth(min: 226, ideal: 252, max: 286)
         } detail: {
@@ -43,6 +63,29 @@ struct RootView: View {
         }
         .tint(AppPalette.copper)
         .task { store.load() }
+        .confirmationDialog(
+            "Remove \(store.state.books.first(where: { $0.id == store.removalCandidateID })?.title ?? "this book")?",
+            isPresented: Binding(
+                get: { store.removalCandidateID != nil },
+                set: { isPresented in if !isPresented { store.removalCandidateID = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove book and its audio", role: .destructive) { store.confirmRemoval() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This deletes the generated audio, podcast episodes, and the imported copy from Audio Shelf. Your original file is not touched.")
+        }
+        .sheet(
+            isPresented: Binding(
+                get: { detailsBookID != nil },
+                set: { isPresented in if !isPresented { detailsBookID = nil } }
+            )
+        ) {
+            if let bookID = detailsBookID, let detailsBook = book(bookID, from: store.state.books) {
+                BookDetailsView(book: detailsBook, onClose: { detailsBookID = nil })
+            }
+        }
         .alert(
             "Audio Shelf",
             isPresented: Binding(
@@ -68,10 +111,7 @@ struct RootView: View {
                 isImporting: store.state.isImporting,
                 onImport: store.chooseAndImport,
                 onImportFile: { store.importBook(sourceURL: $0) },
-                onReview: { store.dispatch(.navigate(.preparation($0))) },
-                onPlay: store.openPlayer,
-                onProgress: store.openGenerationProgress,
-                onResume: store.resumeGeneration
+                actions: actions
             )
         case let .preparation(bookID):
             if let book = book(bookID, from: store.state.books) {
@@ -108,7 +148,8 @@ struct RootView: View {
                     onToggle: store.togglePlayback,
                     onSetRate: { store.setPlaybackRate($0) },
                     onSeek: store.seek,
-                    onFocus: { store.isFocusMode = true }
+                    onFocus: { store.isFocusMode = true },
+                    onRegenerate: { store.beginGeneration(bookID: bookID) }
                 )
             } else {
                 MissingBookView(onReturn: { store.dispatch(.navigate(.library)) })
@@ -121,13 +162,31 @@ func book(_ id: UUID, from books: [Audiobook]) -> Audiobook? {
     books.first(where: { $0.id == id })
 }
 
+// Audio Shelf's palette on macOS background-level rules: hierarchy comes from
+// stacked background levels (window → panel → card → hover), not borders.
+// Dark surfaces get MORE separation between levels, hairlines stay at 0.5pt.
 struct AppPalette {
-    static let ink = Color(red: 0.06, green: 0.12, blue: 0.13)
+    // Level 0 — the window.
+    static let ink = Color(red: 0.05, green: 0.105, blue: 0.115)
+    // Level 1 — panels, cards, grouped sections.
+    static let ink1 = Color(red: 0.083, green: 0.16, blue: 0.17)
+    // Level 2 — hover, active, inputs.
+    static let ink2 = Color(red: 0.115, green: 0.215, blue: 0.225)
     static let sea = Color(red: 0.10, green: 0.26, blue: 0.27)
     static let mist = Color(red: 0.76, green: 0.84, blue: 0.81)
     static let paper = Color(red: 0.95, green: 0.94, blue: 0.88)
     static let copper = Color(red: 0.91, green: 0.31, blue: 0.17)
     static let river = Color(red: 0.23, green: 0.59, blue: 0.60)
+    // 0.5pt definition line — the macOS hairline, never a visible frame.
+    static let hairline = Color(red: 0.76, green: 0.84, blue: 0.81).opacity(0.14)
+}
+
+// 8pt base grid.
+enum Gap {
+    static let s1: CGFloat = 8
+    static let s2: CGFloat = 12
+    static let s3: CGFloat = 16
+    static let s4: CGFloat = 24
 }
 
 struct AppSurface<Content: View>: View {
@@ -139,11 +198,12 @@ struct AppSurface<Content: View>: View {
 
     var body: some View {
         content
-            .background(AppPalette.paper.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(AppPalette.ink1, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(AppPalette.mist.opacity(0.18), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(AppPalette.hairline, lineWidth: 0.5)
             }
+            .shadow(color: .black.opacity(0.18), radius: 3, y: 1)
     }
 }
 
@@ -165,29 +225,50 @@ struct MissingBookView: View {
     }
 }
 
+// Native macOS control proportions: 13pt semibold, 6pt radius, ~28pt height,
+// hover brightens, press dims — every interaction answers back.
 struct PrimaryButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 14, weight: .semibold, design: .rounded))
+            .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(AppPalette.paper)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(configuration.isPressed ? AppPalette.copper.opacity(0.72) : AppPalette.copper, in: Capsule())
-            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                configuration.isPressed
+                    ? AppPalette.copper.opacity(0.72)
+                    : (isHovering ? AppPalette.copper.opacity(0.9) : AppPalette.copper),
+                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            )
+            .onHover { isHovering = $0 }
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.15), value: isHovering)
     }
 }
 
 struct QuietButtonStyle: ButtonStyle {
+    @State private var isHovering = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 14, weight: .medium, design: .rounded))
+            .font(.system(size: 13, weight: .medium))
             .foregroundStyle(AppPalette.paper)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(configuration.isPressed ? AppPalette.paper.opacity(0.18) : AppPalette.paper.opacity(0.10), in: Capsule())
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                configuration.isPressed
+                    ? AppPalette.ink2.opacity(1)
+                    : (isHovering ? AppPalette.ink2 : AppPalette.ink1),
+                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            )
             .overlay {
-                Capsule().stroke(AppPalette.mist.opacity(0.24), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(AppPalette.hairline, lineWidth: 0.5)
             }
-            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
+            .onHover { isHovering = $0 }
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.15), value: isHovering)
     }
 }

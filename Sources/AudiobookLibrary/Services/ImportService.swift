@@ -197,6 +197,9 @@ func normalizeSourceText(_ text: String) -> String {
         .replacingOccurrences(of: "\u{00A0}", with: " ")
         .replacingOccurrences(of: "\r\n", with: "\n")
         .replacingOccurrences(of: "\r", with: "\n")
+        // Decorative scene-break rows ("* * * *", "----", "· · ·") are visual
+        // furniture — a narrator would read them aloud, so they go.
+        .replacingOccurrences(of: "(?m)^[ \\t*_\\-•·=~]{2,}$", with: "", options: .regularExpression)
         .replacingOccurrences(of: "[ \\t]+", with: " ", options: .regularExpression)
         .replacingOccurrences(of: "\\n{3,}", with: "\n\n", options: .regularExpression)
         .trimmingCharacters(in: .whitespacesAndNewlines)

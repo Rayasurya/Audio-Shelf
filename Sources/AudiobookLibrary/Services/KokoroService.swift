@@ -57,9 +57,9 @@ func generateKokoroAudio(
     let narrated = book.narratedChapters
     let manifest = KokoroManifest(
         outputDirectory: outputDirectory.path(percentEncoded: false),
-        voice: selectedNarrationVoice(),
+        voice: book.voice ?? selectedNarrationVoice(),
         chapters: narrated.enumerated().map { position, chapter in
-            var text = applyTextRules(chapter.text, rules: textRules)
+            var text = applyTextRules(chapter.textForNarration, rules: textRules)
             if book.outputMode == .podcast {
                 text = "Episode \(position + 1) of \(narrated.count). \(chapter.title). ... " + text
             }

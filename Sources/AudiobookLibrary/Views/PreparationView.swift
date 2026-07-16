@@ -10,6 +10,8 @@ struct PreparationView: View {
     @State private var draftChapters: [Chapter]
     @State private var selectedChapterID: UUID?
     @State private var outputMode: OutputMode
+    @State private var voice: String
+    @State private var narrationStyle: NarrationStyle
 
     init(book: Audiobook, onBack: @escaping () -> Void, onGenerate: @escaping (Audiobook) -> Void) {
         self.book = book
@@ -20,6 +22,8 @@ struct PreparationView: View {
         _draftChapters = State(initialValue: book.chapters)
         _selectedChapterID = State(initialValue: book.chapters.first?.id)
         _outputMode = State(initialValue: book.outputMode ?? .audiobook)
+        _voice = State(initialValue: book.voice ?? selectedNarrationVoice())
+        _narrationStyle = State(initialValue: book.narrationStyle ?? .faithful)
     }
 
     private var selectedChapterIndex: Int? {
@@ -30,16 +34,22 @@ struct PreparationView: View {
         VStack(spacing: 0) {
             PreparationHeader(onBack: onBack, onGenerate: generate)
             HStack(spacing: 0) {
+                // One scroll surface for the whole pane: the form scrolls away
+                // as you move down, and the chapter list takes all the height
+                // it needs instead of a squeezed inner scroller.
+                ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("PREPARATION REVIEW")
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .tracking(1.2)
                         .foregroundStyle(AppPalette.copper)
                     Text("Make this book ready to speak")
-                        .font(.system(size: 24, weight: .bold, design: .serif))
-                    Text("The MVP asks you to review the title, chapters, and narration text once. Later workflows will reduce this to exceptions only.")
-                        .font(.system(size: 13, design: .rounded))
+                        .font(.system(size: 22, weight: .bold, design: .serif))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Review the title, chapters, and narration text once — then Audio Shelf remembers.")
+                        .font(.system(size: 13))
                         .foregroundStyle(AppPalette.mist.opacity(0.75))
+                        .fixedSize(horizontal: false, vertical: true)
 
                     ReviewField(label: "Book title", value: $draftTitle)
                     ReviewField(label: "Author", value: $draftAuthor)
@@ -58,13 +68,42 @@ struct PreparationView: View {
                         .labelsHidden()
                     }
 
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("VOICE")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .tracking(1)
+                            .foregroundStyle(AppPalette.mist.opacity(0.60))
+                        Picker("Voice", selection: $voice) {
+                            ForEach(availableNarrationVoices, id: \.self) { voiceOption in
+                                Text(voiceOption).tag(voiceOption)
+                            }
+                        }
+                        .labelsHidden()
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("STYLE")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .tracking(1)
+                            .foregroundStyle(AppPalette.mist.opacity(0.60))
+                        Picker("Style", selection: $narrationStyle) {
+                            ForEach(NarrationStyle.allCases, id: \.self) { style in
+                                Text(style.title).tag(style)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        Text(narrationStyle.blurb)
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundStyle(AppPalette.mist.opacity(0.6))
+                    }
+
                     Text("CHAPTERS")
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .tracking(1.1)
                         .foregroundStyle(AppPalette.mist.opacity(0.60))
                         .padding(.top, 5)
-                    ScrollView {
-                        LazyVStack(spacing: 6) {
+                    LazyVStack(spacing: 6) {
                             ForEach($draftChapters) { $chapter in
                                 Button {
                                     selectedChapterID = chapter.id
@@ -103,11 +142,11 @@ struct PreparationView: View {
                                 }
                                 .buttonStyle(.plain)
                             }
-                        }
                     }
                 }
-                .frame(width: 310)
                 .padding(26)
+                }
+                .frame(width: 310)
                 .background(AppPalette.sea)
 
                 Divider().overlay(AppPalette.mist.opacity(0.16))
@@ -135,6 +174,16 @@ struct PreparationView: View {
             return revisedChapter
         }
         reviewedBook.outputMode = outputMode
+        reviewedBook.voice = voice
+        // A style change invalidates cached retellings.
+        if reviewedBook.narrationStyle != narrationStyle {
+            reviewedBook.chapters = reviewedBook.chapters.map { chapter in
+                var cleared = chapter
+                cleared.narrationText = nil
+                return cleared
+            }
+        }
+        reviewedBook.narrationStyle = narrationStyle
         onGenerate(reviewedBook)
     }
 }
@@ -176,10 +225,10 @@ struct ReviewField: View {
                 .foregroundStyle(AppPalette.mist.opacity(0.60))
             TextField(label, text: $value)
                 .textFieldStyle(.plain)
-                .padding(10)
+                .padding(8)
                 .foregroundStyle(AppPalette.paper)
-                .background(AppPalette.paper.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(AppPalette.mist.opacity(0.20), lineWidth: 1) }
+                .background(AppPalette.ink2, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(AppPalette.hairline, lineWidth: 0.5) }
         }
     }
 }
@@ -195,7 +244,7 @@ struct ChapterEditor: View {
                 .foregroundStyle(AppPalette.copper)
             TextField("Chapter title", text: $chapter.title)
                 .textFieldStyle(.plain)
-                .font(.system(size: 28, weight: .bold, design: .serif))
+                .font(.system(size: 24, weight: .bold, design: .serif))
                 .padding(.bottom, 7)
                 .overlay(alignment: .bottom) { Rectangle().fill(AppPalette.mist.opacity(0.22)).frame(height: 1) }
             HStack {
@@ -211,8 +260,8 @@ struct ChapterEditor: View {
                 .scrollContentBackground(.hidden)
                 .padding(12)
                 .foregroundStyle(AppPalette.paper)
-                .background(AppPalette.paper.opacity(0.055), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .overlay { RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(AppPalette.mist.opacity(0.16), lineWidth: 1) }
+                .background(AppPalette.ink1, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(AppPalette.hairline, lineWidth: 0.5) }
         }
     }
 }

@@ -1,10 +1,9 @@
 import AppKit
 import SwiftUI
 
-// Focus mode: the whole window becomes the narration — one sentence large in
-// the center, its neighbors dimmed above and below, nothing else competing
-// for attention. Built for listeners who want a single point of focus
-// (ADHD-friendly), it doubles as the full-screen read-along.
+// Focus mode: the whole window becomes the listening room. The cover is the
+// centerpiece with minimal transport beneath; "Read along" slides in a
+// lyrics panel with the narrated line flowing like Apple Music lyrics.
 struct FocusModeView: View {
     let book: Audiobook
     let timings: BookTimings?
@@ -13,82 +12,45 @@ struct FocusModeView: View {
     let onToggle: () -> Void
     let onSeek: (TimeInterval) -> Void
     let onExit: () -> Void
+    var onRegenerate: (() -> Void)?
 
-    private struct FocusChunk: Identifiable {
-        let id: Int
-        let text: String
-        let start: TimeInterval
-        let end: TimeInterval
+    @State private var showLyrics = true
+
+    private var totalSeconds: TimeInterval {
+        max(book.narratedChapters.compactMap(\.duration).reduce(0, +), 1)
     }
 
-    private var chunks: [FocusChunk] {
-        guard let timings else { return [] }
-        let starts = chapterStartTimes(chapters: book.narratedChapters)
-        let startByIndex = Dictionary(uniqueKeysWithValues: zip(book.narratedChapters.map(\.index), starts))
-        var flattened: [FocusChunk] = []
-        for chapter in timings.chapters {
-            guard let chapterStart = startByIndex[chapter.index] else { continue }
-            for timing in chapter.timings {
-                flattened.append(FocusChunk(
-                    id: flattened.count,
-                    text: timing.text,
-                    start: chapterStart + timing.start,
-                    end: chapterStart + timing.end
-                ))
-            }
-        }
-        return flattened
+    private var currentChapter: Chapter? {
+        let narrated = book.narratedChapters
+        let starts = chapterStartTimes(chapters: narrated)
+        return Array(zip(narrated, starts)).last(where: { _, start in start <= currentSeconds })?.0
     }
 
-    private var currentIndex: Int? {
-        let all = chunks
-        guard !all.isEmpty else { return nil }
-        return all.lastIndex(where: { $0.start <= currentSeconds }) ?? 0
+    private var hasTimings: Bool {
+        !(timings?.chapters.flatMap(\.timings).isEmpty ?? true)
     }
 
     var body: some View {
         ZStack {
             AppPalette.ink.ignoresSafeArea()
-            let all = chunks
-            if let index = currentIndex, !all.isEmpty {
-                VStack(spacing: 34) {
-                    Spacer()
-                    if index > 0 {
-                        Text(all[index - 1].text)
-                            .font(.system(size: 17, design: .serif))
-                            .foregroundStyle(AppPalette.paper.opacity(0.28))
-                            .lineLimit(2)
-                            .onTapGesture { onSeek(all[index - 1].start) }
-                    }
-                    Text(all[index].text)
-                        .font(.system(size: 30, weight: .medium, design: .serif))
-                        .lineSpacing(9)
-                        .foregroundStyle(AppPalette.paper)
-                        .contentTransition(.opacity)
-                        .animation(.easeInOut(duration: 0.3), value: index)
-                        .contextMenu { WordLookupMenu(text: all[index].text) }
-                    if index + 1 < all.count {
-                        Text(all[index + 1].text)
-                            .font(.system(size: 17, design: .serif))
-                            .foregroundStyle(AppPalette.paper.opacity(0.28))
-                            .lineLimit(2)
-                            .onTapGesture { onSeek(all[index + 1].start) }
-                    }
-                    Spacer()
-                    focusControls
-                }
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 760)
-                .padding(48)
-                .frame(maxWidth: .infinity)
-            } else {
-                VStack(spacing: 20) {
-                    Text("This book was generated before read-along timings existed.")
-                        .foregroundStyle(AppPalette.paper.opacity(0.75))
-                    Text("Resume its narration once to gain focus mode.")
-                        .font(.caption)
-                        .foregroundStyle(AppPalette.paper.opacity(0.5))
-                    focusControls
+            HStack(spacing: 0) {
+                coverColumn
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if showLyrics {
+                    LyricsFlowView(
+                        book: book,
+                        timings: timings,
+                        currentSeconds: currentSeconds,
+                        onSeek: onSeek,
+                        onRegenerate: onRegenerate,
+                        emphasisSize: 27,
+                        baseSize: 18
+                    )
+                    .padding(.horizontal, 44)
+                    .padding(.vertical, 30)
+                    .frame(maxWidth: 620)
+                    .background(AppPalette.paper.opacity(0.035))
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
             VStack {
@@ -106,29 +68,85 @@ struct FocusModeView: View {
                 Spacer()
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: showLyrics)
         .onExitCommand(perform: onExit)
+        .foregroundStyle(AppPalette.paper)
+    }
+
+    private var coverColumn: some View {
+        VStack(spacing: 26) {
+            Spacer()
+            BookCover(book: book, compact: false, width: 250, height: 348)
+                .shadow(color: .black.opacity(0.45), radius: 32, y: 16)
+            VStack(spacing: 6) {
+                Text(book.title)
+                    .font(.system(size: 24, weight: .bold, design: .serif))
+                    .multilineTextAlignment(.center)
+                Text(book.author)
+                    .font(.system(size: 14, design: .rounded))
+                    .foregroundStyle(AppPalette.mist.opacity(0.7))
+                if let chapter = currentChapter {
+                    Text(chapter.title)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppPalette.copper)
+                        .padding(.top, 8)
+                }
+            }
+            VStack(spacing: 8) {
+                Slider(
+                    value: Binding(
+                        get: { min(currentSeconds, totalSeconds) },
+                        set: onSeek
+                    ),
+                    in: 0 ... totalSeconds
+                )
+                .labelsHidden()
+                .tint(AppPalette.copper)
+                HStack {
+                    Text(formatDuration(currentSeconds))
+                    Spacer()
+                    Text(formatDuration(totalSeconds))
+                }
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(AppPalette.mist.opacity(0.6))
+            }
+            .frame(maxWidth: 380)
+            focusControls
+            Button {
+                showLyrics.toggle()
+            } label: {
+                Label(
+                    showLyrics ? "Hide read along" : "Read along",
+                    systemImage: showLyrics ? "text.alignright" : "text.aligncenter"
+                )
+            }
+            .buttonStyle(QuietButtonStyle())
+            .help(hasTimings ? "Flowing text beside the narration" : "Regenerate this book once to get synced lyrics")
+            Spacer()
+        }
+        .padding(.horizontal, 46)
     }
 
     private var focusControls: some View {
-        HStack(spacing: 22) {
+        HStack(spacing: 26) {
             Button { onSeek(max(0, currentSeconds - 15)) } label: {
                 Image(systemName: "gobackward.15")
             }
             .buttonStyle(.plain)
             Button(action: onToggle) {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 20, weight: .bold))
-                    .frame(width: 54, height: 54)
+                    .font(.system(size: 23, weight: .bold))
+                    .frame(width: 62, height: 62)
             }
             .buttonStyle(.plain)
             .foregroundStyle(AppPalette.ink)
             .background(AppPalette.copper, in: Circle())
-            Button { onSeek(currentSeconds + 30) } label: {
+            Button { onSeek(min(totalSeconds, currentSeconds + 30)) } label: {
                 Image(systemName: "goforward.30")
             }
             .buttonStyle(.plain)
         }
-        .font(.system(size: 17, weight: .medium))
-        .foregroundStyle(AppPalette.paper.opacity(0.8))
+        .font(.system(size: 18, weight: .medium))
+        .foregroundStyle(AppPalette.paper.opacity(0.85))
     }
 }

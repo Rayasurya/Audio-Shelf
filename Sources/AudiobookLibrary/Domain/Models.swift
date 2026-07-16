@@ -30,8 +30,13 @@ struct Chapter: Codable, Identifiable, Equatable, Sendable {
     // Category assigned by section classification (body, front_matter, …),
     // shown in review so an exclusion is never unexplained.
     var sectionCategory: String?
+    // LLM-rewritten text (per the book's narration style). When present, this
+    // is what gets narrated; `text` stays the faithful original.
+    var narrationText: String?
 
-    init(id: UUID, index: Int, title: String, text: String, audioURL: URL?, duration: TimeInterval?, isExcluded: Bool? = nil, sectionCategory: String? = nil) {
+    var textForNarration: String { narrationText ?? text }
+
+    init(id: UUID, index: Int, title: String, text: String, audioURL: URL?, duration: TimeInterval?, isExcluded: Bool? = nil, sectionCategory: String? = nil, narrationText: String? = nil) {
         self.id = id
         self.index = index
         self.title = title
@@ -40,6 +45,28 @@ struct Chapter: Codable, Identifiable, Equatable, Sendable {
         self.duration = duration
         self.isExcluded = isExcluded
         self.sectionCategory = sectionCategory
+        self.narrationText = narrationText
+    }
+}
+
+// How the text is treated before narration. Faithful never rewrites;
+// easier retelling runs each chapter through the local LLM.
+enum NarrationStyle: String, Codable, Sendable, CaseIterable {
+    case faithful
+    case easier
+
+    var title: String {
+        switch self {
+        case .faithful: "Faithful"
+        case .easier: "Easier retelling"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .faithful: "Narrates the book exactly as written."
+        case .easier: "The local model retells each chapter in plainer language — same story, easier to follow. Needs the model server running."
+        }
     }
 }
 
@@ -60,6 +87,10 @@ struct Audiobook: Codable, Identifiable, Equatable, Sendable {
     var outputMode: OutputMode?
     // Folder of per-chapter episode files when generated in podcast mode.
     var episodesURL: URL?
+    // Per-book narrator voice; nil = the app-wide Settings voice.
+    var voice: String?
+    // nil = faithful.
+    var narrationStyle: NarrationStyle?
 
     // The chapters narration actually voices — excluded sections keep their
     // text for reading but never reach the narration provider or the player
@@ -170,6 +201,7 @@ enum AppAction: Equatable, Sendable {
     case generationFinished(Audiobook)
     case generationFailed(bookID: UUID, message: String)
     case updatePlayback(bookID: UUID, seconds: TimeInterval)
+    case removeBook(UUID)
     case dismissAlert
 }
 
@@ -251,6 +283,19 @@ func reduce(state: AppState, action: AppAction) -> AppState {
             updatedBook.playbackSeconds = seconds
             updatedBook.lastOpenedAt = Date()
             return updatedBook
+        }
+        return next
+    case let .removeBook(bookID):
+        var next = state
+        next.books = state.books.filter { $0.id != bookID }
+        if next.selectedBookID == bookID {
+            next.selectedBookID = next.books.first?.id
+        }
+        switch state.route {
+        case .player(bookID), .preparation(bookID), .generation(bookID):
+            next.route = .library
+        default:
+            break
         }
         return next
     case .dismissAlert:

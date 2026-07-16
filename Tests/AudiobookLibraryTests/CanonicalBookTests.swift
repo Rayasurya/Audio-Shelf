@@ -25,6 +25,7 @@ func canonicalEPUBUsesTOCTitlesAndSkipsBoilerplate() throws {
     for chapter in source.chapters {
         #expect(!chapter.title.localizedCaseInsensitiveContains("Gutenberg"))
         #expect(!chapter.text.localizedCaseInsensitiveContains("Project Gutenberg"))
+        #expect(!chapter.text.contains("* *"), "decorative divider rows must not reach narration text")
     }
 }
 

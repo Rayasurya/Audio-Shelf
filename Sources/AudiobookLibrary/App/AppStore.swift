@@ -127,9 +127,37 @@ final class AppStore {
 
         Task { [repository] in
             do {
-                let generated = try await Task.detached(priority: .userInitiated) { [book, repository] in
+                // Easier-retelling style: rewrite chapters through the local
+                // model first (cached — resuming skips finished rewrites).
+                var book = generatingBook
+                if book.narrationStyle == .easier {
+                    let narrated = book.narratedChapters
+                    for (position, chapter) in narrated.enumerated() where chapter.narrationText == nil {
+                        dispatch(.generationProgressed(GenerationProgress(
+                            bookID: book.id,
+                            completedChapters: position,
+                            totalChapters: narrated.count,
+                            chapterTitle: "Retelling: \(chapter.title)"
+                        )))
+                        guard let rewritten = await rewriteChapterForEasierListening(bookTitle: book.title, chapter: chapter) else {
+                            throw GenerationError.workerFailed(
+                                status: 0,
+                                diagnostics: "The easier-retelling style needs the local model server, and it did not answer. Start it (LM Studio: lms server start) or switch the book back to Faithful in review."
+                            )
+                        }
+                        book.chapters = book.chapters.map { existing in
+                            guard existing.id == chapter.id else { return existing }
+                            var updated = existing
+                            updated.narrationText = rewritten
+                            return updated
+                        }
+                        dispatch(.updateBook(book))
+                    }
+                }
+                let preparedBook = book
+                let generated = try await Task.detached(priority: .userInitiated) { [preparedBook, repository] in
                     try generateKokoroAudio(
-                        book: book,
+                        book: preparedBook,
                         repository: repository,
                         fileManager: .default,
                         progressHandler: { progress in
@@ -144,7 +172,7 @@ final class AppStore {
                 }.value
                 packaged.generationRecord = GenerationRecord(
                     provider: "Kokoro (local)",
-                    voice: selectedNarrationVoice(),
+                    voice: packaged.voice ?? selectedNarrationVoice(),
                     generatedAt: Date(),
                     audioBytes: packaged.generatedURL.flatMap {
                         try? FileManager.default.attributesOfItem(atPath: $0.path(percentEncoded: false))[.size] as? Int
@@ -176,6 +204,52 @@ final class AppStore {
         currentTimings = repository.flatMap { loadBookTimings(bookID: bookID, repository: $0, fileManager: .default) }
         isFocusMode = autoFocusOnPlay()
         dispatch(.navigate(.player(bookID)))
+    }
+
+    // Removal is two-step: request shows the confirmation dialog; confirm
+    // deletes the book's files and library entry.
+    var removalCandidateID: UUID?
+
+    func requestRemoval(bookID: UUID) {
+        guard activeGenerationBookID != bookID else {
+            dispatch(.importFailed("This book is being narrated right now. Wait for it to finish before removing it."))
+            return
+        }
+        removalCandidateID = bookID
+    }
+
+    func confirmRemoval() {
+        guard let bookID = removalCandidateID else { return }
+        removalCandidateID = nil
+        if case .player(bookID) = state.route { stopPlayer() }
+        if let repository {
+            try? FileManager.default.removeItem(at: repository.bookDirectory(bookID: bookID))
+        }
+        dispatch(.removeBook(bookID))
+    }
+
+    func revealBookFiles(bookID: UUID) {
+        guard let repository else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([repository.bookDirectory(bookID: bookID)])
+    }
+
+    func exportAudiobook(bookID: UUID) {
+        guard let book = state.books.first(where: { $0.id == bookID }), let sourceURL = book.generatedURL else {
+            dispatch(.importFailed("Generate this book before exporting it."))
+            return
+        }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = sourceURL.lastPathComponent
+        panel.prompt = "Export"
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        do {
+            if FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: sourceURL, to: destination)
+        } catch {
+            dispatch(.importFailed("Export failed: \(error.localizedDescription)"))
+        }
     }
 
     func resumeGeneration(bookID: UUID) {

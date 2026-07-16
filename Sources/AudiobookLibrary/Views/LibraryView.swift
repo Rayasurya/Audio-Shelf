@@ -5,6 +5,7 @@ struct LibrarySidebar: View {
     let selectedBookID: UUID?
     let onSelect: (UUID) -> Void
     let onImport: () -> Void
+    let actions: BookActions
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -12,7 +13,7 @@ struct LibrarySidebar: View {
                 Image(systemName: "waveform.book.closed.fill")
                     .foregroundStyle(AppPalette.copper)
                 Text("Audio Shelf")
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .font(.system(size: 15, weight: .bold))
             }
             .padding(.top, 12)
 
@@ -28,29 +29,14 @@ struct LibrarySidebar: View {
                 .foregroundStyle(AppPalette.mist.opacity(0.72))
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 5) {
+                LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(books) { book in
-                        Button {
-                            onSelect(book.id)
-                        } label: {
-                            HStack(spacing: 10) {
-                                BookCover(book: book, compact: true)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(book.title)
-                                        .lineLimit(1)
-                                    Text(book.status.title)
-                                        .font(.caption2)
-                                        .foregroundStyle(AppPalette.mist.opacity(0.68))
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .padding(8)
-                            .background(
-                                selectedBookID == book.id ? AppPalette.river.opacity(0.20) : .clear,
-                                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        SidebarBookRow(
+                            book: book,
+                            isSelected: selectedBookID == book.id,
+                            onSelect: { onSelect(book.id) },
+                            actions: actions
+                        )
                     }
                 }
             }
@@ -65,16 +51,54 @@ struct LibrarySidebar: View {
     }
 }
 
+// Sidebar row on native proportions: 13pt text, quiet hover, subtle selection;
+// the ⋯ stays visible (discoverability beat progressive disclosure here) but
+// brightens on hover.
+struct SidebarBookRow: View {
+    let book: Audiobook
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let actions: BookActions
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: Gap.s1) {
+                BookCover(book: book, compact: true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(book.title)
+                        .font(.system(size: 13))
+                        .lineLimit(1)
+                    Text(book.status.title)
+                        .font(.system(size: 11))
+                        .foregroundStyle(AppPalette.mist.opacity(0.66))
+                }
+                Spacer(minLength: 0)
+                BookActionsMenu(book: book, actions: actions)
+                    .opacity(isHovering || isSelected ? 1 : 0.45)
+            }
+            .padding(.horizontal, Gap.s1)
+            .padding(.vertical, 5)
+            .background(
+                isSelected
+                    ? AppPalette.river.opacity(0.22)
+                    : (isHovering ? AppPalette.paper.opacity(0.06) : .clear),
+                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovering)
+    }
+}
+
 struct LibraryView: View {
     let books: [Audiobook]
     let selectedBookID: UUID?
     let isImporting: Bool
     let onImport: () -> Void
     let onImportFile: (URL) -> Void
-    let onReview: (UUID) -> Void
-    let onPlay: (UUID) -> Void
-    let onProgress: (UUID) -> Void
-    let onResume: (UUID) -> Void
+    let actions: BookActions
 
     @State private var environmentChecks: [EnvironmentCheck] = []
     @State private var isDropTargeted = false
@@ -87,7 +111,7 @@ struct LibraryView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: Gap.s4) {
                 ForEach(environmentChecks.filter { !$0.isReady }) { check in
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -102,9 +126,9 @@ struct LibraryView: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("The listening desk")
-                            .font(.system(size: 36, weight: .bold, design: .serif))
+                            .font(.system(size: 26, weight: .bold, design: .serif))
                         Text("Import a book, shape the narration once, then keep listening locally.")
-                            .font(.system(size: 15, design: .rounded))
+                            .font(.system(size: 13))
                             .foregroundStyle(AppPalette.mist.opacity(0.76))
                     }
                     Spacer()
@@ -116,7 +140,7 @@ struct LibraryView: View {
                 }
 
                 if let selectedBook {
-                    ListeningRail(book: selectedBook, onReview: onReview, onPlay: onPlay, onProgress: onProgress, onResume: onResume)
+                    ListeningRail(book: selectedBook, actions: actions)
                 } else {
                     EmptyLibraryView(onImport: onImport)
                 }
@@ -125,7 +149,7 @@ struct LibraryView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack {
                             Text("All books")
-                                .font(.system(size: 19, weight: .semibold, design: .rounded))
+                                .font(.system(size: 15, weight: .semibold))
                             Spacer()
                             Text("\(books.count) total")
                                 .font(.caption)
@@ -133,13 +157,13 @@ struct LibraryView: View {
                         }
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 180, maximum: 220), spacing: 16)], spacing: 16) {
                             ForEach(books) { book in
-                                BookCard(book: book, onReview: onReview, onPlay: onPlay, onProgress: onProgress)
+                                BookCard(book: book, actions: actions)
                             }
                         }
                     }
                 }
             }
-            .padding(34)
+            .padding(Gap.s4)
         }
         .background(AppPalette.ink)
         .foregroundStyle(AppPalette.paper)
@@ -173,20 +197,21 @@ struct LibraryView: View {
 
 struct ListeningRail: View {
     let book: Audiobook
-    let onReview: (UUID) -> Void
-    let onPlay: (UUID) -> Void
-    let onProgress: (UUID) -> Void
-    let onResume: (UUID) -> Void
+    let actions: BookActions
 
     var body: some View {
         AppSurface {
             HStack(spacing: 28) {
                 BookCover(book: book, compact: false)
                 VStack(alignment: .leading, spacing: 13) {
-                    Text(book.status == .readyToListen ? "READY ON YOUR SHELF" : "CURRENTLY IN THE WORKROOM")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .tracking(1.2)
-                        .foregroundStyle(AppPalette.copper)
+                    HStack {
+                        Text(book.status == .readyToListen ? "READY ON YOUR SHELF" : "CURRENTLY IN THE WORKROOM")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .tracking(1.2)
+                            .foregroundStyle(AppPalette.copper)
+                        Spacer()
+                        BookActionsMenu(book: book, actions: actions)
+                    }
                     Text(book.title)
                         .font(.system(size: 28, weight: .bold, design: .serif))
                         .lineLimit(2)
@@ -209,26 +234,26 @@ struct ListeningRail: View {
                     HStack(spacing: 10) {
                         switch book.status {
                         case .readyToListen:
-                            Button("Listen now") { onPlay(book.id) }
+                            Button("Listen now") { actions.onPlay(book.id) }
                                 .buttonStyle(PrimaryButtonStyle())
                         case .generating:
                             Button {
-                                onProgress(book.id)
+                                actions.onProgress(book.id)
                             } label: {
                                 Label("View progress", systemImage: "waveform")
                             }
                             .buttonStyle(PrimaryButtonStyle())
                         case .readyForReview:
-                            Button("Review book") { onReview(book.id) }
+                            Button("Review book") { actions.onReview(book.id) }
                                 .buttonStyle(PrimaryButtonStyle())
                         case .failed:
                             Button {
-                                onResume(book.id)
+                                actions.onResume(book.id)
                             } label: {
                                 Label("Resume narration", systemImage: "arrow.clockwise")
                             }
                             .buttonStyle(PrimaryButtonStyle())
-                            Button("Review book") { onReview(book.id) }
+                            Button("Review book") { actions.onReview(book.id) }
                                 .buttonStyle(QuietButtonStyle())
                         }
                     }
@@ -270,9 +295,8 @@ struct EmptyLibraryView: View {
 
 struct BookCard: View {
     let book: Audiobook
-    let onReview: (UUID) -> Void
-    let onPlay: (UUID) -> Void
-    let onProgress: (UUID) -> Void
+    let actions: BookActions
+    @State private var isHovering = false
 
     private var cardActionIcon: String {
         switch book.status {
@@ -283,14 +307,18 @@ struct BookCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            BookCover(book: book, compact: false)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: Gap.s1) {
+            HStack(alignment: .top) {
+                BookCover(book: book, compact: false)
+                Spacer()
+                BookActionsMenu(book: book, actions: actions)
+                    .opacity(isHovering ? 1 : 0.5)
+            }
             Text(book.title)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(.system(size: 14, weight: .semibold))
                 .lineLimit(2)
             Text(book.author)
-                .font(.caption)
+                .font(.system(size: 11))
                 .foregroundStyle(AppPalette.mist.opacity(0.68))
                 .lineLimit(1)
             HStack {
@@ -298,9 +326,10 @@ struct BookCard: View {
                 Spacer()
                 Button {
                     switch book.status {
-                    case .readyToListen: onPlay(book.id)
-                    case .generating: onProgress(book.id)
-                    case .readyForReview, .failed: onReview(book.id)
+                    case .readyToListen: actions.onPlay(book.id)
+                    case .generating: actions.onProgress(book.id)
+                    case .readyForReview: actions.onReview(book.id)
+                    case .failed: actions.onResume(book.id)
                     }
                 } label: {
                     Image(systemName: cardActionIcon)
@@ -310,22 +339,30 @@ struct BookCard: View {
                 .background(AppPalette.paper.opacity(0.10), in: Circle())
             }
         }
-        .padding(14)
-        .background(AppPalette.paper.opacity(0.055), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(Gap.s2)
+        .background(
+            isHovering ? AppPalette.ink2 : AppPalette.ink1,
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(AppPalette.mist.opacity(0.16), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(AppPalette.hairline, lineWidth: 0.5)
         }
+        .shadow(color: .black.opacity(isHovering ? 0.28 : 0.14), radius: isHovering ? 6 : 2, y: isHovering ? 3 : 1)
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovering)
     }
 }
 
 struct BookCover: View {
     let book: Audiobook
     let compact: Bool
+    var width: CGFloat?
+    var height: CGFloat?
 
     var body: some View {
-        let width: CGFloat = compact ? 34 : 112
-        let height: CGFloat = compact ? 44 : 156
+        let width: CGFloat = width ?? (compact ? 34 : 112)
+        let height: CGFloat = height ?? (compact ? 44 : 156)
         ZStack(alignment: .bottomLeading) {
             LinearGradient(
                 colors: [coverColor(for: book.title), AppPalette.sea],
