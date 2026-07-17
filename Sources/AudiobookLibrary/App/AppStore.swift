@@ -63,7 +63,29 @@ final class AppStore {
         importBook(sourceURL: selectedURL)
     }
 
+    // A same-named source that's already on the shelf gets a confirmation
+    // instead of a silent second copy. Held here while the dialog shows.
+    var duplicateImportCandidate: URL?
+
+    func duplicateOnShelf(for sourceURL: URL) -> Audiobook? {
+        state.books.first { $0.sourceURL.lastPathComponent == sourceURL.lastPathComponent }
+    }
+
+    func confirmDuplicateImport() {
+        guard let sourceURL = duplicateImportCandidate else { return }
+        duplicateImportCandidate = nil
+        performImport(sourceURL: sourceURL)
+    }
+
     func importBook(sourceURL: URL) {
+        guard duplicateOnShelf(for: sourceURL) == nil else {
+            duplicateImportCandidate = sourceURL
+            return
+        }
+        performImport(sourceURL: sourceURL)
+    }
+
+    private func performImport(sourceURL: URL) {
         guard let repository else {
             dispatch(.importFailed("The library folder is not ready. Restart the app and try again."))
             return

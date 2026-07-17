@@ -7,8 +7,9 @@ Highlights:
 - **Everything local**: Kokoro TTS narration, ffmpeg packaging, and optional LLM section classification (via LM Studio/Ollama) all run on-device.
 - **Clean chapters**: titles from the EPUB table of contents; Gutenberg boilerplate, licenses, and contents pages excluded automatically — with a review screen that shows what was excluded and why, and lets you override anything.
 - **Read along**: chunk-level timestamps recorded at generation drive live text highlighting, tap-to-seek, and a full-screen focus mode (one sentence at a time — built with ADHD and reading difficulties in mind).
-- **Your workflows**: trigger-word removal/replacement rules, per-book voices, playback speed 0.5–3×, skip-notes-while-listening, listening presets, and a per-book record of exactly how each edition was generated.
-- **Interruption-proof**: completed chapters are fingerprinted; resuming narrates only what's missing or changed.
+- **Your workflows**: trigger-word removal/replacement rules, per-book voices, narration styles (faithful, or an easier retelling rewritten chapter-by-chapter by your local LLM), playback speed 0.5–3×, skip-notes-while-listening, listening presets, and a per-book record of exactly how each edition was generated.
+- **Interruption-proof**: completed chapters are fingerprinted; resuming narrates only what's missing or changed. Chapters meet with soft fades, never clicks.
+- **Yours to keep**: export any audiobook as a standard M4B, reveal every file in Finder, remove books (with confirmation) whenever you like.
 
 MIT-licensed. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the ground rules (local-first, faithful narration, nothing silent).
 
@@ -18,7 +19,15 @@ MIT-licensed. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the ground rules (loc
 - The local Kokoro environment at `../kokoro-tts/venv2`, or an `AUDIOBOOK_KOKORO_PYTHON` environment variable that points to a Python executable containing `kokoro`, `numpy`, and `soundfile`.
 - `ffmpeg` for AAC/M4B packaging. The app detects Homebrew's `/opt/homebrew/bin/ffmpeg`, or use `AUDIOBOOK_FFMPEG` to provide its absolute path.
 
-## Run
+## Install as an app
+
+```sh
+zsh Scripts/build-app.sh --install
+```
+
+builds the ad-hoc-signed `Audio Shelf.app` (no Xcode needed) and copies it into `/Applications`. Keyboard shortcuts: ⌘I import · Space play/pause · ⌘⇧F focus mode · ⌘←/⌘→ seek · ⌘, settings.
+
+## Run from source
 
 From this directory:
 

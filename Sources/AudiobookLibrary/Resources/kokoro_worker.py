@@ -55,6 +55,22 @@ def completed_chapter_meta(chapter, voice, output_directory):
     return meta
 
 
+FADE_SECONDS = 0.14
+
+
+def apply_edge_fades(audio):
+    """Soft fade-in/out at chapter edges so consecutive chapters meet without
+    clicks or abrupt cuts in the packaged audiobook."""
+    fade_samples = int(SAMPLE_RATE * FADE_SECONDS)
+    if len(audio) < fade_samples * 3:
+        return audio
+    faded = audio.astype(np.float32, copy=True)
+    ramp = np.linspace(0.0, 1.0, fade_samples, dtype=np.float32)
+    faded[:fade_samples] *= ramp
+    faded[-fade_samples:] *= ramp[::-1]
+    return faded
+
+
 def write_chapter(pipeline, chapter, output_directory, voice):
     chapter_index = chapter["index"]
     chapter_title = chapter["title"]
@@ -88,6 +104,7 @@ def write_chapter(pipeline, chapter, output_directory, voice):
     if not chunks:
         raise ValueError(f"No audio was generated for chapter {chapter_index}")
     audio = np.concatenate(chunks)
+    audio = apply_edge_fades(audio)
     temporary_path = output_directory / f"chapter-{chapter_index:03d}.tmp.wav"
     sf.write(temporary_path, audio, SAMPLE_RATE)
     temporary_path.replace(final_path)

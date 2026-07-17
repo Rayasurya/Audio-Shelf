@@ -76,6 +76,19 @@ struct RootView: View {
         } message: {
             Text("This deletes the generated audio, podcast episodes, and the imported copy from Audio Shelf. Your original file is not touched.")
         }
+        .confirmationDialog(
+            "\(store.duplicateImportCandidate?.lastPathComponent ?? "This book") is already on your shelf.",
+            isPresented: Binding(
+                get: { store.duplicateImportCandidate != nil },
+                set: { isPresented in if !isPresented { store.duplicateImportCandidate = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Import again as a new book") { store.confirmDuplicateImport() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Importing again makes a separate copy — useful for trying a different voice or style. The existing book is untouched.")
+        }
         .sheet(
             isPresented: Binding(
                 get: { detailsBookID != nil },
