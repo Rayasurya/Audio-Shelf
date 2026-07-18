@@ -4,6 +4,9 @@ enum BookStatus: String, Codable, CaseIterable, Sendable {
     case readyForReview
     case generating
     case readyToListen
+    // Narration was deliberately stopped or interrupted; completed chapters
+    // are kept and resume is free. Not an error state.
+    case paused
     case failed
 
     var title: String {
@@ -11,6 +14,7 @@ enum BookStatus: String, Codable, CaseIterable, Sendable {
         case .readyForReview: "Ready for review"
         case .generating: "Generating"
         case .readyToListen: "Ready to listen"
+        case .paused: "Paused"
         case .failed: "Needs attention"
         }
     }
@@ -140,6 +144,38 @@ struct GenerationProgress: Equatable, Sendable {
     }
 }
 
+// What is happening to a book right now. Process state lives HERE, not in
+// BookStatus — books say what they are; the job says what's being done.
+enum GenerationPhase: String, Equatable, Sendable {
+    case preparing
+    case retelling
+    case narrating
+    case packaging
+
+    var title: String {
+        switch self {
+        case .preparing: "Preparing"
+        case .retelling: "Retelling"
+        case .narrating: "Narrating"
+        case .packaging: "Packaging"
+        }
+    }
+}
+
+struct GenerationJob: Equatable, Sendable {
+    let bookID: UUID
+    var phase: GenerationPhase
+    var completedChapters: Int
+    var totalChapters: Int
+    var currentChapterTitle: String
+    let startedAt: Date
+
+    var fraction: Double {
+        guard totalChapters > 0 else { return 0 }
+        return Double(completedChapters) / Double(totalChapters)
+    }
+}
+
 // What the narration produces: one chaptered audiobook file, or a set of
 // podcast-style episode files (one per chapter, with a spoken episode intro).
 enum OutputMode: String, Codable, Sendable, CaseIterable {
@@ -174,7 +210,8 @@ struct AppState: Equatable, Sendable {
     var books: [Audiobook]
     var selectedBookID: UUID?
     var route: AppRoute
-    var generationProgress: GenerationProgress?
+    var activeJob: GenerationJob?
+    var queue: [UUID]
     var isImporting: Bool
     var alertMessage: String?
 
@@ -182,7 +219,8 @@ struct AppState: Equatable, Sendable {
         books: [],
         selectedBookID: nil,
         route: .library,
-        generationProgress: nil,
+        activeJob: nil,
+        queue: [],
         isImporting: false,
         alertMessage: nil
     )
@@ -196,10 +234,13 @@ enum AppAction: Equatable, Sendable {
     case importSucceeded(Audiobook)
     case importFailed(String)
     case updateBook(Audiobook)
-    case generationStarted(UUID)
-    case generationProgressed(GenerationProgress)
+    case generationStarted(GenerationJob)
+    case jobUpdated(GenerationJob)
     case generationFinished(Audiobook)
     case generationFailed(bookID: UUID, message: String)
+    case generationStopped(bookID: UUID, message: String)
+    case enqueueGeneration(UUID)
+    case removeFromQueue(UUID)
     case updatePlayback(bookID: UUID, seconds: TimeInterval)
     case removeBook(UUID)
     case dismissAlert
@@ -212,7 +253,8 @@ func reduce(state: AppState, action: AppAction) -> AppState {
             books: books,
             selectedBookID: books.first?.id,
             route: .library,
-            generationProgress: nil,
+            activeJob: nil,
+            queue: [],
             isImporting: false,
             alertMessage: nil
         )
@@ -244,19 +286,20 @@ func reduce(state: AppState, action: AppAction) -> AppState {
         var next = state
         next.books = state.books.map { $0.id == book.id ? book : $0 }
         return next
-    case let .generationStarted(bookID):
+    case let .generationStarted(job):
         var next = state
-        next.route = .generation(bookID)
-        next.generationProgress = GenerationProgress(bookID: bookID, completedChapters: 0, totalChapters: 0, chapterTitle: "Preparing narration")
+        next.route = .generation(job.bookID)
+        next.activeJob = job
+        next.queue.removeAll { $0 == job.bookID }
         return next
-    case let .generationProgressed(progress):
+    case let .jobUpdated(job):
         var next = state
-        next.generationProgress = progress
+        next.activeJob = job
         return next
     case let .generationFinished(book):
         var next = state
         next.books = state.books.map { $0.id == book.id ? book : $0 }
-        next.generationProgress = nil
+        next.activeJob = nil
         // Only steal the screen when the user is watching this book being
         // made; someone browsing another book keeps their place.
         if case .generation(book.id) = state.route {
@@ -272,8 +315,34 @@ func reduce(state: AppState, action: AppAction) -> AppState {
             failedBook.failureMessage = message
             return failedBook
         }
-        next.generationProgress = nil
+        next.activeJob = nil
         next.alertMessage = message
+        return next
+    case let .generationStopped(bookID, message):
+        var next = state
+        next.books = state.books.map { book in
+            guard book.id == bookID else { return book }
+            var pausedBook = book
+            pausedBook.status = .paused
+            pausedBook.failureMessage = message
+            return pausedBook
+        }
+        next.activeJob = nil
+        // A stopped job's screen has nothing left to show — land on the hero,
+        // which now offers Resume.
+        if case .generation(bookID) = state.route {
+            next.route = .library
+        }
+        return next
+    case let .enqueueGeneration(bookID):
+        var next = state
+        if !next.queue.contains(bookID), next.activeJob?.bookID != bookID {
+            next.queue.append(bookID)
+        }
+        return next
+    case let .removeFromQueue(bookID):
+        var next = state
+        next.queue.removeAll { $0 == bookID }
         return next
     case let .updatePlayback(bookID, seconds):
         var next = state
@@ -288,6 +357,7 @@ func reduce(state: AppState, action: AppAction) -> AppState {
     case let .removeBook(bookID):
         var next = state
         next.books = state.books.filter { $0.id != bookID }
+        next.queue.removeAll { $0 == bookID }
         if next.selectedBookID == bookID {
             next.selectedBookID = next.books.first?.id
         }

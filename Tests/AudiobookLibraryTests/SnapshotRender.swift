@@ -69,6 +69,43 @@ private func sampleBook() -> (Audiobook, BookTimings) {
     return (book, BookTimings(version: 1, voice: "af_sarah", chapters: chapterTimings))
 }
 
+// Audit evidence: the generation flow's states as they exist today.
+@Test(.enabled(if: snapshotsEnabled))
+@MainActor
+func renderGenerationFlowStates() throws {
+    let (book, _) = sampleBook()
+    var generating = book
+    generating.status = .generating
+    try renderSnapshot(
+        GenerationView(
+            book: generating,
+            job: GenerationJob(bookID: generating.id, phase: .narrating, completedChapters: 5, totalChapters: 12, currentChapterTitle: "Chapter 6. The Fog Bell", startedAt: Date().addingTimeInterval(-431)),
+            isStopping: false,
+            onStop: {},
+            onReturnToLibrary: {}
+        ),
+        size: CGSize(width: 900, height: 640),
+        name: "audit-generation-progress"
+    )
+    let actions = BookActions(
+        onPlay: { _ in }, onReview: { _ in }, onProgress: { _ in }, onResume: { _ in },
+        onRegenerate: { _ in }, onDetails: { _ in }, onExport: { _ in }, onRevealFiles: { _ in }, onRemove: { _ in }
+    )
+    try renderSnapshot(
+        ListeningRail(book: generating, actions: actions).padding(24).background(AppPalette.ink),
+        size: CGSize(width: 900, height: 300),
+        name: "audit-hero-generating"
+    )
+    var failed = book
+    failed.status = .failed
+    failed.failureMessage = "Narration was interrupted before it finished. Review the book and generate again."
+    try renderSnapshot(
+        ListeningRail(book: failed, actions: actions).padding(24).background(AppPalette.ink),
+        size: CGSize(width: 900, height: 320),
+        name: "audit-hero-failed"
+    )
+}
+
 @Test(.enabled(if: snapshotsEnabled))
 @MainActor
 func renderPlayerSnapshots() throws {

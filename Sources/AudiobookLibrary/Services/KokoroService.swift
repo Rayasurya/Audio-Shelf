@@ -6,6 +6,7 @@ enum GenerationError: LocalizedError {
     case malformedWorkerEvent(String)
     case workerFailed(status: Int32, diagnostics: String)
     case missingChapterOutput(Int)
+    case stopped
 
     var errorDescription: String? {
         switch self {
@@ -19,6 +20,8 @@ enum GenerationError: LocalizedError {
             "Kokoro stopped with status \(status). \(diagnostics)"
         case let .missingChapterOutput(index):
             "Kokoro did not produce audio for chapter \(index)."
+        case .stopped:
+            "Narration was stopped."
         }
     }
 }
@@ -44,10 +47,40 @@ struct KokoroWorkerEvent: Codable, Sendable {
     let message: String?
 }
 
+// Lets the main actor stop a narration that runs in a detached task: the
+// worker handles SIGINT by finishing its current chunk, saving, and exiting,
+// so Stop never loses a completed chapter.
+final class GenerationControl: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+    private var stopRequested = false
+
+    func register(_ runningProcess: Process) {
+        lock.lock()
+        defer { lock.unlock() }
+        process = runningProcess
+        if stopRequested { runningProcess.interrupt() }
+    }
+
+    func requestStop() {
+        lock.lock()
+        defer { lock.unlock() }
+        stopRequested = true
+        process?.interrupt()
+    }
+
+    var isStopRequested: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return stopRequested
+    }
+}
+
 func generateKokoroAudio(
     book: Audiobook,
     repository: LibraryRepository,
     fileManager: FileManager,
+    control: GenerationControl? = nil,
     progressHandler: @escaping @Sendable (GenerationProgress) -> Void
 ) throws -> Audiobook {
     let bookDirectory = repository.bookDirectory(bookID: book.id)
@@ -80,6 +113,7 @@ func generateKokoroAudio(
         workerURL: workerURL,
         manifestURL: manifestURL,
         book: book,
+        control: control,
         progressHandler: progressHandler
     )
 
@@ -144,6 +178,7 @@ func runKokoroProcess(
     workerURL: URL,
     manifestURL: URL,
     book: Audiobook,
+    control: GenerationControl? = nil,
     progressHandler: @escaping @Sendable (GenerationProgress) -> Void
 ) throws -> [KokoroWorkerEvent] {
     let process = Process()
@@ -179,6 +214,7 @@ func runKokoroProcess(
         standardOutput.fileHandleForReading.readabilityHandler = nil
         throw error
     }
+    control?.register(process)
     process.waitUntilExit()
     standardOutput.fileHandleForReading.readabilityHandler = nil
     let diagnosticsData = standardError.fileHandleForReading.readDataToEndOfFile()
@@ -188,6 +224,9 @@ func runKokoroProcess(
         throw GenerationError.malformedWorkerEvent(failure.localizedDescription)
     }
     guard process.terminationStatus == 0 else {
+        if control?.isStopRequested == true {
+            throw GenerationError.stopped
+        }
         throw GenerationError.workerFailed(status: process.terminationStatus, diagnostics: diagnostics)
     }
     return events

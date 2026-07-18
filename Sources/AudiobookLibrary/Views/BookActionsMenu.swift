@@ -13,11 +13,14 @@ struct BookActions {
     let onExport: (UUID) -> Void
     let onRevealFiles: (UUID) -> Void
     let onRemove: (UUID) -> Void
+    var onStop: () -> Void = {}
+    var onDequeue: (UUID) -> Void = { _ in }
 }
 
 struct BookActionsMenu: View {
     let book: Audiobook
     let actions: BookActions
+    var isQueued: Bool = false
 
     var body: some View {
         Menu {
@@ -26,10 +29,14 @@ struct BookActionsMenu: View {
                 Button("Listen now") { actions.onPlay(book.id) }
             case .generating:
                 Button("View progress") { actions.onProgress(book.id) }
+                Button("Stop narration", role: .destructive) { actions.onStop() }
             case .readyForReview:
                 Button("Review book") { actions.onReview(book.id) }
-            case .failed:
+            case .paused, .failed:
                 Button("Resume narration") { actions.onResume(book.id) }
+            }
+            if isQueued {
+                Button("Remove from queue") { actions.onDequeue(book.id) }
             }
             Button("Details…") { actions.onDetails(book.id) }
             Divider()

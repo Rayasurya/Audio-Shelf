@@ -3,15 +3,19 @@ import AppKit
 import Foundation
 import Observation
 import UniformTypeIdentifiers
+import UserNotifications
 
 @MainActor
 @Observable
 final class AppStore {
     private(set) var state: AppState
     private(set) var repository: LibraryRepository?
-    private(set) var activeGenerationBookID: UUID?
     private(set) var currentTimings: BookTimings?
+    private var generationControl: GenerationControl?
+    private(set) var isStoppingJob = false
     var isFocusMode = false
+
+    var activeGenerationBookID: UUID? { state.activeJob?.bookID }
     var isPlaying: Bool
     var playbackRate: Float
     var currentPlaybackSeconds: TimeInterval
@@ -38,8 +42,8 @@ final class AppStore {
             let books = try repository.load(fileManager: .default).map { book -> Audiobook in
                 guard book.status == .generating else { return book }
                 var interrupted = book
-                interrupted.status = .failed
-                interrupted.failureMessage = "Narration was interrupted before it finished. Review the book and generate again."
+                interrupted.status = .paused
+                interrupted.failureMessage = "Narration was paused when the app closed. Finished chapters are kept — resume anytime."
                 return interrupted
             }
             dispatch(.load(books))
@@ -135,17 +139,26 @@ final class AppStore {
             dispatch(.importFailed("The selected book is no longer available."))
             return
         }
-        guard activeGenerationBookID == nil else {
-            let busyTitle = state.books.first(where: { $0.id == activeGenerationBookID })?.title ?? "Another book"
-            dispatch(.importFailed("\(busyTitle) is being narrated right now. One book generates at a time — check its progress from the library."))
+        // Busy → queue, never refuse. The job auto-starts when the slot frees.
+        guard state.activeJob == nil else {
+            dispatch(.enqueueGeneration(bookID))
             return
         }
-        activeGenerationBookID = bookID
+        let control = GenerationControl()
+        generationControl = control
+        isStoppingJob = false
         var generatingBook = book
         generatingBook.status = .generating
         generatingBook.failureMessage = nil
         dispatch(.updateBook(generatingBook))
-        dispatch(.generationStarted(bookID))
+        dispatch(.generationStarted(GenerationJob(
+            bookID: bookID,
+            phase: .preparing,
+            completedChapters: 0,
+            totalChapters: generatingBook.narratedChapters.count,
+            currentChapterTitle: "Getting ready",
+            startedAt: Date()
+        )))
 
         Task { [repository] in
             do {
@@ -155,12 +168,8 @@ final class AppStore {
                 if book.narrationStyle == .easier {
                     let narrated = book.narratedChapters
                     for (position, chapter) in narrated.enumerated() where chapter.narrationText == nil {
-                        dispatch(.generationProgressed(GenerationProgress(
-                            bookID: book.id,
-                            completedChapters: position,
-                            totalChapters: narrated.count,
-                            chapterTitle: "Retelling: \(chapter.title)"
-                        )))
+                        if control.isStopRequested { throw GenerationError.stopped }
+                        updateJob(phase: .retelling, completed: position, total: narrated.count, title: chapter.title)
                         guard let rewritten = await rewriteChapterForEasierListening(bookTitle: book.title, chapter: chapter) else {
                             throw GenerationError.workerFailed(
                                 status: 0,
@@ -175,6 +184,7 @@ final class AppStore {
                         }
                         dispatch(.updateBook(book))
                     }
+                    if control.isStopRequested { throw GenerationError.stopped }
                 }
                 let preparedBook = book
                 let generated = try await Task.detached(priority: .userInitiated) { [preparedBook, repository] in
@@ -182,13 +192,20 @@ final class AppStore {
                         book: preparedBook,
                         repository: repository,
                         fileManager: .default,
+                        control: control,
                         progressHandler: { progress in
                             Task { @MainActor [weak self] in
-                                self?.dispatch(.generationProgressed(progress))
+                                self?.updateJob(
+                                    phase: .narrating,
+                                    completed: progress.completedChapters,
+                                    total: progress.totalChapters,
+                                    title: progress.chapterTitle
+                                )
                             }
                         }
                     )
                 }.value
+                updateJob(phase: .packaging, completed: generated.narratedChapters.count, total: generated.narratedChapters.count, title: "Packaging your audiobook")
                 var packaged = try await Task.detached(priority: .userInitiated) { [generated, repository] in
                     try packageAudiobook(book: generated, repository: repository, fileManager: .default)
                 }.value
@@ -200,16 +217,89 @@ final class AppStore {
                         try? FileManager.default.attributesOfItem(atPath: $0.path(percentEncoded: false))[.size] as? Int
                     }
                 )
-                activeGenerationBookID = nil
+                let wasWatching = isUserWatching(bookID: packaged.id)
+                generationControl = nil
                 dispatch(.generationFinished(packaged))
                 if case .player(packaged.id) = state.route {
                     preparePlayer(for: packaged)
                     currentTimings = loadBookTimings(bookID: packaged.id, repository: repository, fileManager: .default)
                 }
+                if !wasWatching { notifyBookReady(packaged) }
+                startNextInQueue()
             } catch {
-                activeGenerationBookID = nil
-                dispatch(.generationFailed(bookID: bookID, message: error.localizedDescription))
+                generationControl = nil
+                let completed = state.activeJob?.completedChapters ?? 0
+                let total = state.activeJob?.totalChapters ?? 0
+                if control.isStopRequested || (error as? GenerationError).map({ if case .stopped = $0 { true } else { false } }) == true {
+                    dispatch(.generationStopped(
+                        bookID: bookID,
+                        message: "Narration stopped — \(completed) of \(total) chapters narrated. Resume anytime."
+                    ))
+                } else {
+                    dispatch(.generationFailed(bookID: bookID, message: error.localizedDescription))
+                }
+                isStoppingJob = false
+                startNextInQueue()
             }
+        }
+    }
+
+    private func updateJob(phase: GenerationPhase, completed: Int, total: Int, title: String) {
+        guard var job = state.activeJob else { return }
+        job.phase = phase
+        job.completedChapters = completed
+        job.totalChapters = max(total, job.totalChapters)
+        job.currentChapterTitle = title
+        dispatch(.jobUpdated(job))
+    }
+
+    // Graceful stop: the worker finishes its current chunk, saves, and exits;
+    // completed chapters stay on disk and resume is free.
+    func stopGeneration() {
+        guard state.activeJob != nil, let control = generationControl else { return }
+        isStoppingJob = true
+        control.requestStop()
+    }
+
+    // Best-effort synchronous stop for app termination: request the stop and
+    // persist the paused state immediately so relaunch is honest.
+    func stopGenerationForQuit() {
+        guard let job = state.activeJob else { return }
+        generationControl?.requestStop()
+        dispatch(.generationStopped(
+            bookID: job.bookID,
+            message: "Narration was paused when the app closed. Finished chapters are kept — resume anytime."
+        ))
+    }
+
+    private func startNextInQueue() {
+        guard state.activeJob == nil, let next = state.queue.first else { return }
+        beginGeneration(bookID: next)
+    }
+
+    func removeFromQueue(bookID: UUID) {
+        dispatch(.removeFromQueue(bookID))
+    }
+
+    private func isUserWatching(bookID: UUID) -> Bool {
+        guard NSApp?.isActive == true else { return false }
+        switch state.route {
+        case .generation(bookID), .player(bookID): return true
+        default: return false
+        }
+    }
+
+    // D13: the "ready to listen" moment when the user isn't watching.
+    private func notifyBookReady(_ book: Audiobook) {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "Ready to listen"
+            content.body = "\(book.title) has finished narrating."
+            content.sound = .default
+            center.add(UNNotificationRequest(identifier: book.id.uuidString, content: content, trigger: nil))
         }
     }
 

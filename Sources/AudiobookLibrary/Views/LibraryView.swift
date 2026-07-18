@@ -3,6 +3,7 @@ import SwiftUI
 struct LibrarySidebar: View {
     let books: [Audiobook]
     let selectedBookID: UUID?
+    let queuedIDs: Set<UUID>
     let onSelect: (UUID) -> Void
     let onImport: () -> Void
     let actions: BookActions
@@ -34,6 +35,7 @@ struct LibrarySidebar: View {
                         SidebarBookRow(
                             book: book,
                             isSelected: selectedBookID == book.id,
+                            isQueued: queuedIDs.contains(book.id),
                             onSelect: { onSelect(book.id) },
                             actions: actions
                         )
@@ -57,6 +59,7 @@ struct LibrarySidebar: View {
 struct SidebarBookRow: View {
     let book: Audiobook
     let isSelected: Bool
+    var isQueued: Bool = false
     let onSelect: () -> Void
     let actions: BookActions
     @State private var isHovering = false
@@ -69,12 +72,12 @@ struct SidebarBookRow: View {
                     Text(book.title)
                         .font(.system(size: 13))
                         .lineLimit(1)
-                    Text(book.status.title)
+                    Text(isQueued ? "Queued" : book.status.title)
                         .font(.system(size: 11))
-                        .foregroundStyle(AppPalette.mist.opacity(0.66))
+                        .foregroundStyle(isQueued ? AppPalette.river : AppPalette.mist.opacity(0.66))
                 }
                 Spacer(minLength: 0)
-                BookActionsMenu(book: book, actions: actions)
+                BookActionsMenu(book: book, actions: actions, isQueued: isQueued)
                     .opacity(isHovering || isSelected ? 1 : 0.45)
             }
             .padding(.horizontal, Gap.s1)
@@ -96,6 +99,7 @@ struct LibraryView: View {
     let books: [Audiobook]
     let selectedBookID: UUID?
     let isImporting: Bool
+    let queuedIDs: Set<UUID>
     let onImport: () -> Void
     let onImportFile: (URL) -> Void
     let actions: BookActions
@@ -143,6 +147,34 @@ struct LibraryView: View {
                     ListeningRail(book: selectedBook, actions: actions)
                 } else {
                     EmptyLibraryView(onImport: onImport)
+                }
+
+                // D11: the queue as a feature — what narrates next.
+                let queuedBooks = queuedIDs.compactMap { id in books.first(where: { $0.id == id }) }
+                if !queuedBooks.isEmpty {
+                    VStack(alignment: .leading, spacing: Gap.s1) {
+                        Text("NEXT UP")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .tracking(1.1)
+                            .foregroundStyle(AppPalette.river)
+                        ForEach(queuedBooks) { queuedBook in
+                            HStack(spacing: Gap.s1) {
+                                BookCover(book: queuedBook, compact: true)
+                                Text(queuedBook.title)
+                                    .font(.system(size: 13))
+                                    .lineLimit(1)
+                                Text("starts when the current book finishes")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(AppPalette.mist.opacity(0.55))
+                                Spacer()
+                                Button("Remove") { actions.onDequeue(queuedBook.id) }
+                                    .buttonStyle(QuietButtonStyle())
+                            }
+                            .padding(.horizontal, Gap.s2)
+                            .padding(.vertical, 6)
+                            .background(AppPalette.ink1, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                    }
                 }
 
                 if !books.isEmpty {
@@ -225,7 +257,7 @@ struct ListeningRail: View {
                             .foregroundStyle(AppPalette.mist.opacity(0.68))
                     }
                     Spacer(minLength: 3)
-                    if book.status == .failed, let failureMessage = book.failureMessage {
+                    if book.status == .failed || book.status == .paused, let failureMessage = book.failureMessage {
                         Text(failureMessage)
                             .font(.system(size: 12, design: .rounded))
                             .foregroundStyle(Color(red: 0.95, green: 0.55, blue: 0.48))
@@ -246,7 +278,7 @@ struct ListeningRail: View {
                         case .readyForReview:
                             Button("Review book") { actions.onReview(book.id) }
                                 .buttonStyle(PrimaryButtonStyle())
-                        case .failed:
+                        case .paused, .failed:
                             Button {
                                 actions.onResume(book.id)
                             } label: {
@@ -302,7 +334,8 @@ struct BookCard: View {
         switch book.status {
         case .readyToListen: "play.fill"
         case .generating: "waveform"
-        case .readyForReview, .failed: "arrow.right"
+        case .paused, .failed: "arrow.clockwise"
+        case .readyForReview: "arrow.right"
         }
     }
 
@@ -329,7 +362,7 @@ struct BookCard: View {
                     case .readyToListen: actions.onPlay(book.id)
                     case .generating: actions.onProgress(book.id)
                     case .readyForReview: actions.onReview(book.id)
-                    case .failed: actions.onResume(book.id)
+                    case .paused, .failed: actions.onResume(book.id)
                     }
                 } label: {
                     Image(systemName: cardActionIcon)
@@ -409,6 +442,7 @@ func statusColor(_ status: BookStatus) -> Color {
     case .readyForReview: AppPalette.mist
     case .generating: AppPalette.river
     case .readyToListen: AppPalette.copper
+    case .paused: AppPalette.mist
     case .failed: Color(red: 0.95, green: 0.45, blue: 0.40)
     }
 }

@@ -2,47 +2,136 @@ import SwiftUI
 
 struct GenerationView: View {
     let book: Audiobook
-    let progress: GenerationProgress?
+    let job: GenerationJob?
+    let isStopping: Bool
+    let onStop: () -> Void
     let onReturnToLibrary: () -> Void
 
-    private var currentProgress: GenerationProgress {
-        progress ?? GenerationProgress(bookID: book.id, completedChapters: 0, totalChapters: book.narratedChapters.count, chapterTitle: "Starting Kokoro")
+    private var phases: [GenerationPhase] {
+        book.narrationStyle == .easier
+            ? [.retelling, .narrating, .packaging]
+            : [.narrating, .packaging]
+    }
+
+    private var currentPhase: GenerationPhase { job?.phase ?? .preparing }
+
+    // Narration is the only phase with real per-chapter fractions; the
+    // others show activity, not a pretend percentage.
+    private var isDeterminate: Bool {
+        currentPhase == .narrating || currentPhase == .retelling
     }
 
     var body: some View {
-        VStack(spacing: 26) {
+        VStack(spacing: Gap.s4) {
             BookCover(book: book, compact: false)
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Text("Making your audiobook")
-                    .font(.system(size: 33, weight: .bold, design: .serif))
-                Text("Kokoro is working locally on this Mac.")
-                    .font(.system(size: 15, design: .rounded))
+                    .font(.system(size: 26, weight: .bold, design: .serif))
+                Text("Everything runs locally on this Mac.")
+                    .font(.system(size: 13))
                     .foregroundStyle(AppPalette.mist.opacity(0.74))
             }
+
+            phaseStrip
+
             AppSurface {
-                VStack(alignment: .leading, spacing: 13) {
+                VStack(alignment: .leading, spacing: Gap.s2) {
                     HStack {
-                        Text(currentProgress.chapterTitle)
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        Text(job?.currentChapterTitle ?? "Getting ready")
+                            .font(.system(size: 14, weight: .semibold))
+                            .lineLimit(1)
                         Spacer()
-                        Text("\(currentProgress.completedChapters) / \(max(currentProgress.totalChapters, book.narratedChapters.count))")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppPalette.copper)
+                        if let job, job.totalChapters > 0, isDeterminate {
+                            Text("\(job.completedChapters) / \(job.totalChapters)")
+                                .font(.system(size: 13, weight: .bold).monospacedDigit())
+                                .foregroundStyle(AppPalette.copper)
+                        }
                     }
-                    ProgressView(value: currentProgress.fraction)
-                        .tint(AppPalette.copper)
-                    Text("Completed chapter audio is saved immediately, so an interrupted job will never be marked complete by mistake.")
-                        .font(.caption)
-                        .foregroundStyle(AppPalette.mist.opacity(0.68))
+                    if let job, isDeterminate {
+                        ProgressView(value: job.fraction)
+                            .tint(AppPalette.copper)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(AppPalette.copper)
+                    }
+                    HStack {
+                        Text("Completed chapters are saved immediately — stopping never loses finished work.")
+                        Spacer()
+                        if let startedAt = job?.startedAt {
+                            ElapsedTimeText(since: startedAt)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(AppPalette.mist.opacity(0.66))
                 }
-                .padding(18)
+                .padding(Gap.s3)
             }
-            Button("Keep browsing", action: onReturnToLibrary)
+            .frame(maxWidth: 560)
+
+            HStack(spacing: Gap.s2) {
+                Button("Keep browsing", action: onReturnToLibrary)
+                    .buttonStyle(QuietButtonStyle())
+                Button {
+                    onStop()
+                } label: {
+                    Label(isStopping ? "Stopping…" : "Stop narration", systemImage: "stop.fill")
+                        .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.40))
+                }
                 .buttonStyle(QuietButtonStyle())
+                .disabled(isStopping || job == nil)
+            }
+            Text(isStopping
+                ? "Finishing the current passage, then saving — a few seconds."
+                : "Stopping keeps the \(job?.completedChapters ?? 0) finished chapters — resume anytime.")
+                .font(.caption)
+                .foregroundStyle(AppPalette.mist.opacity(0.55))
         }
-        .padding(34)
+        .padding(Gap.s4)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppPalette.ink)
         .foregroundStyle(AppPalette.paper)
+    }
+
+    private var phaseStrip: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(phases.enumerated()), id: \.element) { index, phase in
+                if index > 0 {
+                    Text("·").foregroundStyle(AppPalette.mist.opacity(0.4))
+                }
+                phaseLabel(phase)
+            }
+        }
+        .font(.system(size: 12, weight: .semibold, design: .rounded))
+    }
+
+    @ViewBuilder
+    private func phaseLabel(_ phase: GenerationPhase) -> some View {
+        let phaseOrder = phases
+        let currentIndex = phaseOrder.firstIndex(of: currentPhase) ?? -1
+        let phaseIndex = phaseOrder.firstIndex(of: phase) ?? 0
+        if phaseIndex < currentIndex {
+            Label(phase.title, systemImage: "checkmark")
+                .foregroundStyle(AppPalette.mist.opacity(0.75))
+        } else if phase == currentPhase {
+            Text(phase.title)
+                .foregroundStyle(AppPalette.copper)
+        } else {
+            Text(phase.title)
+                .foregroundStyle(AppPalette.mist.opacity(0.4))
+        }
+    }
+}
+
+// Ticks once a second while visible; plain text otherwise.
+struct ElapsedTimeText: View {
+    let since: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let seconds = max(0, Int(context.date.timeIntervalSince(since)))
+            Text("\(seconds / 60) min \(seconds % 60) s elapsed")
+                .monospacedDigit()
+        }
     }
 }

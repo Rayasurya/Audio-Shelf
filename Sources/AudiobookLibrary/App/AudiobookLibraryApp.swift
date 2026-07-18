@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct AudiobookLibraryApp: App {
     @State private var store = AppStore()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         WindowGroup("Audio Shelf") {

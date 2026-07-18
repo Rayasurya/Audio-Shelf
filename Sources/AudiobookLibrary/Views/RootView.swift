@@ -14,7 +14,9 @@ struct RootView: View {
             onDetails: { detailsBookID = $0 },
             onExport: store.exportAudiobook,
             onRevealFiles: store.revealBookFiles,
-            onRemove: store.requestRemoval
+            onRemove: store.requestRemoval,
+            onStop: { store.stopGeneration() },
+            onDequeue: store.removeFromQueue
         )
     }
 
@@ -46,6 +48,7 @@ struct RootView: View {
             LibrarySidebar(
                 books: store.state.books,
                 selectedBookID: store.state.selectedBookID,
+                queuedIDs: Set(store.state.queue),
                 onSelect: { bookID in
                     store.dispatch(.selectBook(bookID))
                     if store.activeGenerationBookID == bookID {
@@ -122,6 +125,7 @@ struct RootView: View {
                 books: store.state.books,
                 selectedBookID: store.state.selectedBookID,
                 isImporting: store.state.isImporting,
+                queuedIDs: Set(store.state.queue),
                 onImport: store.chooseAndImport,
                 onImportFile: { store.importBook(sourceURL: $0) },
                 actions: actions
@@ -143,7 +147,9 @@ struct RootView: View {
             if let book = book(bookID, from: store.state.books) {
                 GenerationView(
                     book: book,
-                    progress: store.state.generationProgress,
+                    job: store.state.activeJob?.bookID == bookID ? store.state.activeJob : nil,
+                    isStopping: store.isStoppingJob,
+                    onStop: { store.stopGeneration() },
                     onReturnToLibrary: { store.dispatch(.navigate(.library)) }
                 )
             } else {
