@@ -12,7 +12,7 @@ struct LibrarySidebar: View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(spacing: 10) {
                 Image(systemName: "waveform.book.closed.fill")
-                    .foregroundStyle(AppPalette.copper)
+                    .foregroundStyle(AppPalette.accent)
                 Text("Audio Shelf")
                     .font(.system(size: 15, weight: .bold))
             }
@@ -48,7 +48,7 @@ struct LibrarySidebar: View {
                 .foregroundStyle(AppPalette.mist.opacity(0.60))
         }
         .padding(18)
-        .foregroundStyle(AppPalette.paper)
+        .foregroundStyle(AppPalette.frost)
         .background(AppPalette.sea)
     }
 }
@@ -85,7 +85,7 @@ struct SidebarBookRow: View {
             .background(
                 isSelected
                     ? AppPalette.river.opacity(0.22)
-                    : (isHovering ? AppPalette.paper.opacity(0.06) : .clear),
+                    : (isHovering ? AppPalette.frost.opacity(0.06) : .clear),
                 in: RoundedRectangle(cornerRadius: 6, style: .continuous)
             )
         }
@@ -124,8 +124,12 @@ struct LibraryView: View {
                         Spacer()
                     }
                     .padding(12)
-                    .foregroundStyle(AppPalette.ink)
-                    .background(Color(red: 0.96, green: 0.76, blue: 0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .foregroundStyle(AppPalette.frost)
+                    .background(AppPalette.rose.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(AppPalette.rose.opacity(0.55), lineWidth: 0.5)
+                    }
                 }
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -198,13 +202,13 @@ struct LibraryView: View {
             .padding(Gap.s4)
         }
         .background(AppPalette.ink)
-        .foregroundStyle(AppPalette.paper)
+        .foregroundStyle(AppPalette.frost)
         .overlay {
             if isDropTargeted {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(AppPalette.copper, style: StrokeStyle(lineWidth: 3, dash: [10, 8]))
+                    .stroke(AppPalette.accent, style: StrokeStyle(lineWidth: 3, dash: [10, 8]))
                     .padding(10)
-                    .background(AppPalette.copper.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .background(AppPalette.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .overlay {
                         Label("Drop books to import", systemImage: "square.and.arrow.down")
                             .font(.system(size: 20, weight: .semibold, design: .rounded))
@@ -240,7 +244,7 @@ struct ListeningRail: View {
                         Text(book.status == .readyToListen ? "READY ON YOUR SHELF" : "CURRENTLY IN THE WORKROOM")
                             .font(.system(size: 10, weight: .bold, design: .rounded))
                             .tracking(1.2)
-                            .foregroundStyle(AppPalette.copper)
+                            .foregroundStyle(AppPalette.accent)
                         Spacer()
                         BookActionsMenu(book: book, actions: actions)
                     }
@@ -305,9 +309,9 @@ struct EmptyLibraryView: View {
             HStack(spacing: 26) {
                 Image(systemName: "books.vertical.fill")
                     .font(.system(size: 42, weight: .light))
-                    .foregroundStyle(AppPalette.copper)
+                    .foregroundStyle(AppPalette.accent)
                     .frame(width: 86, height: 110)
-                    .background(AppPalette.copper.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(AppPalette.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 VStack(alignment: .leading, spacing: 9) {
                     Text("Your shelf is empty")
                         .font(.system(size: 24, weight: .bold, design: .serif))
@@ -369,7 +373,7 @@ struct BookCard: View {
                         .frame(width: 30, height: 30)
                 }
                 .buttonStyle(.plain)
-                .background(AppPalette.paper.opacity(0.10), in: Circle())
+                .background(AppPalette.frost.opacity(0.10), in: Circle())
             }
         }
         .padding(Gap.s2)
@@ -412,13 +416,13 @@ struct BookCover: View {
                 }
             }
             .padding(compact ? 6 : 12)
-            .foregroundStyle(AppPalette.paper)
+            .foregroundStyle(AppPalette.frost)
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: compact ? 7 : 12, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: compact ? 7 : 12, style: .continuous)
-                .stroke(AppPalette.paper.opacity(0.26), lineWidth: 1)
+                .stroke(AppPalette.frost.opacity(0.26), lineWidth: 1)
         }
     }
 }
@@ -441,18 +445,18 @@ func statusColor(_ status: BookStatus) -> Color {
     switch status {
     case .readyForReview: AppPalette.mist
     case .generating: AppPalette.river
-    case .readyToListen: AppPalette.copper
+    case .readyToListen: AppPalette.accent
     case .paused: AppPalette.mist
-    case .failed: Color(red: 0.95, green: 0.45, blue: 0.40)
+    case .failed: AppPalette.rose
     }
 }
 
 func coverColor(for title: String) -> Color {
     let values = [
-        Color(red: 0.22, green: 0.47, blue: 0.49),
-        Color(red: 0.48, green: 0.25, blue: 0.42),
-        Color(red: 0.38, green: 0.40, blue: 0.17),
-        Color(red: 0.31, green: 0.31, blue: 0.50)
+        Color(red: 0.42, green: 0.32, blue: 0.85),
+        Color(red: 0.28, green: 0.32, blue: 0.62),
+        Color(red: 0.16, green: 0.45, blue: 0.47),
+        Color(red: 0.62, green: 0.24, blue: 0.55)
     ]
     let index = abs(title.unicodeScalars.reduce(0) { $0 + Int($1.value) }) % values.count
     return values[index]

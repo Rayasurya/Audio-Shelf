@@ -64,7 +64,7 @@ struct RootView: View {
         } detail: {
             routeView(store: store)
         }
-        .tint(AppPalette.copper)
+        .tint(AppPalette.accent)
         .task { store.load() }
         .confirmationDialog(
             "Remove \(store.state.books.first(where: { $0.id == store.removalCandidateID })?.title ?? "this book")?",
@@ -193,9 +193,14 @@ struct AppPalette {
     static let ink2 = Color(red: 0.115, green: 0.215, blue: 0.225)
     static let sea = Color(red: 0.10, green: 0.26, blue: 0.27)
     static let mist = Color(red: 0.76, green: 0.84, blue: 0.81)
-    static let paper = Color(red: 0.95, green: 0.94, blue: 0.88)
-    static let copper = Color(red: 0.91, green: 0.31, blue: 0.17)
-    static let river = Color(red: 0.23, green: 0.59, blue: 0.60)
+    // Text and light surfaces — frost: a cool, green-cast white. Never beige.
+    static let frost = Color(red: 0.92, green: 0.95, blue: 0.94)
+    // The identity accent — electric violet. Bold, and unclaimed in audio
+    // (orange is Audible's, green is Spotify's). Never orange.
+    static let accent = Color(red: 0.49, green: 0.36, blue: 1.0)
+    static let river = Color(red: 0.18, green: 0.75, blue: 0.71)
+    // Attention/error family — rose, never coral or amber.
+    static let rose = Color(red: 0.95, green: 0.34, blue: 0.55)
     // 0.5pt definition line — the macOS hairline, never a visible frame.
     static let hairline = Color(red: 0.76, green: 0.84, blue: 0.81).opacity(0.14)
 }
@@ -240,7 +245,7 @@ struct MissingBookView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppPalette.ink)
-        .foregroundStyle(AppPalette.paper)
+        .foregroundStyle(AppPalette.frost)
     }
 }
 
@@ -252,13 +257,13 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(AppPalette.paper)
+            .foregroundStyle(AppPalette.frost)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(
                 configuration.isPressed
-                    ? AppPalette.copper.opacity(0.72)
-                    : (isHovering ? AppPalette.copper.opacity(0.9) : AppPalette.copper),
+                    ? AppPalette.accent.opacity(0.72)
+                    : (isHovering ? AppPalette.accent.opacity(0.9) : AppPalette.accent),
                 in: RoundedRectangle(cornerRadius: 6, style: .continuous)
             )
             .onHover { isHovering = $0 }
@@ -273,7 +278,7 @@ struct QuietButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(AppPalette.paper)
+            .foregroundStyle(AppPalette.frost)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(

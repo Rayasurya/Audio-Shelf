@@ -67,7 +67,7 @@ struct SettingsView: View {
                             .truncationMode(.middle)
                     } label: {
                         Label(check.title, systemImage: check.isReady ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                            .foregroundStyle(check.isReady ? Color.green : Color.orange)
+                            .foregroundStyle(check.isReady ? Color.green : AppPalette.rose)
                     }
                 }
                 Button("Check again") { refreshChecks() }
@@ -128,7 +128,7 @@ struct SettingsView: View {
                         "Local model server",
                         systemImage: llmStatus?.isReachable == true ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
                     )
-                    .foregroundStyle(llmStatus?.isReachable == true ? Color.green : Color.orange)
+                    .foregroundStyle(llmStatus?.isReachable == true ? Color.green : AppPalette.rose)
                 }
                 Button("Check server") {
                     Task { llmStatus = await checkLLMStatus() }

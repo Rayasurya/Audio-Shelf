@@ -49,7 +49,7 @@ struct FocusModeView: View {
                     .padding(.horizontal, 44)
                     .padding(.vertical, 30)
                     .frame(maxWidth: 620)
-                    .background(AppPalette.paper.opacity(0.035))
+                    .background(AppPalette.frost.opacity(0.035))
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
@@ -57,7 +57,7 @@ struct FocusModeView: View {
                 HStack {
                     Text(book.title)
                         .font(.system(size: 13, weight: .semibold, design: .serif))
-                        .foregroundStyle(AppPalette.paper.opacity(0.45))
+                        .foregroundStyle(AppPalette.frost.opacity(0.45))
                     Spacer()
                     Button(action: onExit) {
                         Label("Exit focus", systemImage: "arrow.down.right.and.arrow.up.left")
@@ -70,7 +70,7 @@ struct FocusModeView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: showLyrics)
         .onExitCommand(perform: onExit)
-        .foregroundStyle(AppPalette.paper)
+        .foregroundStyle(AppPalette.frost)
     }
 
     private var coverColumn: some View {
@@ -88,7 +88,7 @@ struct FocusModeView: View {
                 if let chapter = currentChapter {
                     Text(chapter.title)
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppPalette.copper)
+                        .foregroundStyle(AppPalette.accent)
                         .padding(.top, 8)
                 }
             }
@@ -101,7 +101,7 @@ struct FocusModeView: View {
                     in: 0 ... totalSeconds
                 )
                 .labelsHidden()
-                .tint(AppPalette.copper)
+                .tint(AppPalette.accent)
                 HStack {
                     Text(formatDuration(currentSeconds))
                     Spacer()
@@ -140,13 +140,13 @@ struct FocusModeView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(AppPalette.ink)
-            .background(AppPalette.copper, in: Circle())
+            .background(AppPalette.accent, in: Circle())
             Button { onSeek(min(totalSeconds, currentSeconds + 30)) } label: {
                 Image(systemName: "goforward.30")
             }
             .buttonStyle(.plain)
         }
         .font(.system(size: 18, weight: .medium))
-        .foregroundStyle(AppPalette.paper.opacity(0.85))
+        .foregroundStyle(AppPalette.frost.opacity(0.85))
     }
 }

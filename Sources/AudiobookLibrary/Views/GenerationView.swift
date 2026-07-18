@@ -44,16 +44,16 @@ struct GenerationView: View {
                         if let job, job.totalChapters > 0, isDeterminate {
                             Text("\(job.completedChapters) / \(job.totalChapters)")
                                 .font(.system(size: 13, weight: .bold).monospacedDigit())
-                                .foregroundStyle(AppPalette.copper)
+                                .foregroundStyle(AppPalette.accent)
                         }
                     }
                     if let job, isDeterminate {
                         ProgressView(value: job.fraction)
-                            .tint(AppPalette.copper)
+                            .tint(AppPalette.accent)
                     } else {
                         ProgressView()
                             .controlSize(.small)
-                            .tint(AppPalette.copper)
+                            .tint(AppPalette.accent)
                     }
                     HStack {
                         Text("Completed chapters are saved immediately — stopping never loses finished work.")
@@ -76,7 +76,7 @@ struct GenerationView: View {
                     onStop()
                 } label: {
                     Label(isStopping ? "Stopping…" : "Stop narration", systemImage: "stop.fill")
-                        .foregroundStyle(Color(red: 0.95, green: 0.45, blue: 0.40))
+                        .foregroundStyle(AppPalette.rose)
                 }
                 .buttonStyle(QuietButtonStyle())
                 .disabled(isStopping || job == nil)
@@ -90,7 +90,7 @@ struct GenerationView: View {
         .padding(Gap.s4)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppPalette.ink)
-        .foregroundStyle(AppPalette.paper)
+        .foregroundStyle(AppPalette.frost)
     }
 
     private var phaseStrip: some View {
@@ -115,7 +115,7 @@ struct GenerationView: View {
                 .foregroundStyle(AppPalette.mist.opacity(0.75))
         } else if phase == currentPhase {
             Text(phase.title)
-                .foregroundStyle(AppPalette.copper)
+                .foregroundStyle(AppPalette.accent)
         } else {
             Text(phase.title)
                 .foregroundStyle(AppPalette.mist.opacity(0.4))

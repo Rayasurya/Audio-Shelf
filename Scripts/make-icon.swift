@@ -9,44 +9,46 @@ guard CommandLine.arguments.count == 2 else {
 }
 let outputPath = CommandLine.arguments[1]
 
-let ink = NSColor(calibratedRed: 0.08, green: 0.16, blue: 0.17, alpha: 1)
-let paper = NSColor(calibratedRed: 0.95, green: 0.94, blue: 0.88, alpha: 1)
-let copper = NSColor(calibratedRed: 0.91, green: 0.31, blue: 0.17, alpha: 1)
-let sea = NSColor(calibratedRed: 0.10, green: 0.26, blue: 0.27, alpha: 1)
+// Audio Shelf identity: electric violet plate, frost book, aqua spine,
+// deep-ink waveform. No orange, no beige, anywhere.
+let ink = NSColor(calibratedRed: 0.05, green: 0.11, blue: 0.12, alpha: 1)
+let frost = NSColor(calibratedRed: 0.93, green: 0.96, blue: 0.95, alpha: 1)
+let violet = NSColor(calibratedRed: 0.36, green: 0.24, blue: 0.96, alpha: 1)
+let aqua = NSColor(calibratedRed: 0.18, green: 0.75, blue: 0.71, alpha: 1)
 
 let image = NSImage(size: NSSize(width: size, height: size))
 image.lockFocus()
 
-// macOS icon plate: rounded rect with the standard ~10% margin.
+// macOS icon plate: rounded rect with the standard ~10% margin — a full,
+// confident field of violet.
 let plateInset: CGFloat = 88
 let plateRect = NSRect(x: plateInset, y: plateInset, width: size - plateInset * 2, height: size - plateInset * 2)
 let plate = NSBezierPath(roundedRect: plateRect, xRadius: 200, yRadius: 200)
-ink.setFill()
+violet.setFill()
 plate.fill()
 
-// Book: a closed cover seen straight on, slightly left of center,
-// with a narrow spine strip.
-let bookRect = NSRect(x: 320, y: 262, width: 384, height: 500)
-let book = NSBezierPath(roundedRect: bookRect, xRadius: 34, yRadius: 34)
-paper.setFill()
+// Book: a closed cover seen straight on, generous on the plate.
+let bookRect = NSRect(x: 302, y: 242, width: 420, height: 540)
+let book = NSBezierPath(roundedRect: bookRect, xRadius: 36, yRadius: 36)
+frost.setFill()
 book.fill()
 
 // Spine strip: the book path clipped to its left edge, so the strip keeps
 // the cover's rounded corners.
 NSGraphicsContext.saveGraphicsState()
-NSBezierPath(rect: NSRect(x: bookRect.minX, y: bookRect.minY, width: 74, height: bookRect.height)).addClip()
-sea.setFill()
+NSBezierPath(rect: NSRect(x: bookRect.minX, y: bookRect.minY, width: 80, height: bookRect.height)).addClip()
+aqua.setFill()
 book.fill()
 NSGraphicsContext.restoreGraphicsState()
 
-// Sound wave: five flat bars centered on the cover.
-let barWidth: CGFloat = 44
-let barGap: CGFloat = 34
-let barHeights: [CGFloat] = [120, 220, 320, 220, 120]
+// Sound wave: five deep-ink bars centered on the cover — the book speaks.
+let barWidth: CGFloat = 48
+let barGap: CGFloat = 32
+let barHeights: [CGFloat] = [130, 240, 350, 240, 130]
 let waveWidth = CGFloat(barHeights.count) * barWidth + CGFloat(barHeights.count - 1) * barGap
-let waveOriginX = bookRect.minX + 74 + ((bookRect.width - 74) - waveWidth) / 2
+let waveOriginX = bookRect.minX + 80 + ((bookRect.width - 80) - waveWidth) / 2
 let centerY = bookRect.midY
-copper.setFill()
+ink.setFill()
 for (index, height) in barHeights.enumerated() {
     let x = waveOriginX + CGFloat(index) * (barWidth + barGap)
     let bar = NSBezierPath(

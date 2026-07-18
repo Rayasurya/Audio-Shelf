@@ -154,6 +154,6 @@ private struct PlayerViewTextPane: View {
         LyricLinesStack(lines: window, currentIndex: current, emphasisSize: 24, baseSize: 17, onSeek: { _ in })
             .padding(46)
             .background(AppPalette.ink)
-            .foregroundStyle(AppPalette.paper)
+            .foregroundStyle(AppPalette.frost)
     }
 }

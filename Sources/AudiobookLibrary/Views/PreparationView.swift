@@ -42,7 +42,7 @@ struct PreparationView: View {
                     Text("PREPARATION REVIEW")
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .tracking(1.2)
-                        .foregroundStyle(AppPalette.copper)
+                        .foregroundStyle(AppPalette.accent)
                     Text("Make this book ready to speak")
                         .font(.system(size: 22, weight: .bold, design: .serif))
                         .fixedSize(horizontal: false, vertical: true)
@@ -118,7 +118,7 @@ struct PreparationView: View {
                                         .help(chapter.isExcluded == true ? "Excluded from narration" : "Will be narrated")
                                         Text("\(chapter.index)")
                                             .font(.caption.weight(.bold))
-                                            .foregroundStyle(AppPalette.copper)
+                                            .foregroundStyle(AppPalette.accent)
                                             .frame(width: 20)
                                         Text(chapter.title)
                                             .lineLimit(1)
@@ -161,7 +161,7 @@ struct PreparationView: View {
             }
         }
         .background(AppPalette.ink)
-        .foregroundStyle(AppPalette.paper)
+        .foregroundStyle(AppPalette.frost)
     }
 
     private func generate() {
@@ -226,7 +226,7 @@ struct ReviewField: View {
             TextField(label, text: $value)
                 .textFieldStyle(.plain)
                 .padding(8)
-                .foregroundStyle(AppPalette.paper)
+                .foregroundStyle(AppPalette.frost)
                 .background(AppPalette.ink2, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .overlay { RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(AppPalette.hairline, lineWidth: 0.5) }
         }
@@ -241,7 +241,7 @@ struct ChapterEditor: View {
             Text("CHAPTER \(chapter.index)")
                 .font(.system(size: 10, weight: .bold, design: .rounded))
                 .tracking(1.2)
-                .foregroundStyle(AppPalette.copper)
+                .foregroundStyle(AppPalette.accent)
             TextField("Chapter title", text: $chapter.title)
                 .textFieldStyle(.plain)
                 .font(.system(size: 24, weight: .bold, design: .serif))
@@ -259,7 +259,7 @@ struct ChapterEditor: View {
                 .font(.system(size: 15, design: .serif))
                 .scrollContentBackground(.hidden)
                 .padding(12)
-                .foregroundStyle(AppPalette.paper)
+                .foregroundStyle(AppPalette.frost)
                 .background(AppPalette.ink1, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay { RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(AppPalette.hairline, lineWidth: 0.5) }
         }

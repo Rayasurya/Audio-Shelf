@@ -104,7 +104,7 @@ struct BookDetailsView: View {
                         HStack(spacing: 10) {
                             Text("\(chapter.index)")
                                 .font(.caption.weight(.bold))
-                                .foregroundStyle(AppPalette.copper)
+                                .foregroundStyle(AppPalette.accent)
                                 .frame(width: 22, alignment: .trailing)
                             Text(chapter.title)
                                 .lineLimit(1)
@@ -136,7 +136,7 @@ struct BookDetailsView: View {
         }
         .frame(width: 520, height: 560)
         .background(AppPalette.ink)
-        .foregroundStyle(AppPalette.paper)
+        .foregroundStyle(AppPalette.frost)
     }
 
     private var detailsGrid: some View {

@@ -85,7 +85,7 @@ struct PlayerView: View {
                         Text(currentChapter?.title.uppercased() ?? "BEGINNING")
                             .font(.system(size: 11, weight: .bold, design: .rounded))
                             .tracking(1.3)
-                            .foregroundStyle(AppPalette.copper)
+                            .foregroundStyle(AppPalette.accent)
                             .lineLimit(1)
                         Text("Chapter \(currentChapter?.index ?? 1)")
                             .font(.system(size: 24, weight: .bold, design: .serif))
@@ -112,7 +112,7 @@ struct PlayerView: View {
                         ),
                         in: 0 ... totalSeconds
                     )
-                    .tint(AppPalette.copper)
+                    .tint(AppPalette.accent)
                     .controlSize(.large)
                     HStack {
                         Text(formatDuration(currentSeconds))
@@ -136,7 +136,7 @@ struct PlayerView: View {
                     .buttonStyle(.plain)
                     .keyboardShortcut(.space, modifiers: [])
                     .foregroundStyle(AppPalette.ink)
-                    .background(AppPalette.copper, in: Circle())
+                    .background(AppPalette.accent, in: Circle())
                     Button { onSeek(min(totalSeconds, currentSeconds + 30)) } label: {
                         Image(systemName: "goforward.30")
                     }
@@ -158,10 +158,10 @@ struct PlayerView: View {
                         step: 0.05
                     )
                     .labelsHidden()
-                    .tint(AppPalette.copper)
+                    .tint(AppPalette.accent)
                     Text("\(String(format: "%.2f", playbackRate))×")
                         .font(.system(size: 12, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(AppPalette.copper)
+                        .foregroundStyle(AppPalette.accent)
                         .frame(width: 46, alignment: .trailing)
                 }
 
@@ -178,7 +178,7 @@ struct PlayerView: View {
             .padding(.vertical, 34)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .foregroundStyle(AppPalette.paper)
+        .foregroundStyle(AppPalette.frost)
         .background(AppPalette.ink)
     }
 }
@@ -203,7 +203,7 @@ struct ChapterTimeline: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Text("\(chapter.index)")
-                                    .foregroundStyle(AppPalette.copper)
+                                    .foregroundStyle(AppPalette.accent)
                                     .frame(width: 18)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(chapter.title).lineLimit(1)
@@ -219,7 +219,7 @@ struct ChapterTimeline: View {
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 9)
-                            .background(AppPalette.paper.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .background(AppPalette.frost.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
                         .buttonStyle(.plain)
                     }
@@ -323,11 +323,11 @@ struct LyricsFlowView: View {
                 }
             }
             .padding(12)
-            .foregroundStyle(AppPalette.paper)
-            .background(AppPalette.copper.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .foregroundStyle(AppPalette.frost)
+            .background(AppPalette.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(AppPalette.copper.opacity(0.5), lineWidth: 1)
+                    .stroke(AppPalette.accent.opacity(0.5), lineWidth: 1)
             }
             LyricsFallbackReader(book: book, currentSeconds: currentSeconds)
         }
@@ -350,7 +350,7 @@ struct LyricLinesStack: View {
                 let isCurrent = line.id == currentIndex
                 Text(line.text)
                     .font(.system(size: isCurrent ? emphasisSize : baseSize, weight: isCurrent ? .bold : .medium, design: .serif))
-                    .foregroundStyle(isCurrent ? AppPalette.paper : AppPalette.paper.opacity(0.32))
+                    .foregroundStyle(isCurrent ? AppPalette.frost : AppPalette.frost.opacity(0.32))
                     .lineSpacing(isCurrent ? 7 : 4)
                     .blur(radius: isCurrent ? 0 : 0.4)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -385,7 +385,7 @@ struct LyricsFallbackReader: View {
                     Text(info.0.text)
                         .font(.system(size: 15, design: .serif))
                         .lineSpacing(6)
-                        .foregroundStyle(AppPalette.paper.opacity(0.85))
+                        .foregroundStyle(AppPalette.frost.opacity(0.85))
                         .textSelection(.enabled)
                 }
             }
