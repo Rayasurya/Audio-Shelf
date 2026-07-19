@@ -3,7 +3,9 @@ import SwiftUI
 struct LibrarySidebar: View {
     let books: [Audiobook]
     let selectedBookID: UUID?
+    let isHome: Bool
     let queuedIDs: Set<UUID>
+    let onHome: () -> Void
     let onSelect: (UUID) -> Void
     let onImport: () -> Void
     let actions: BookActions
@@ -23,6 +25,28 @@ struct LibrarySidebar: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(PrimaryButtonStyle())
+
+            // Persistent Home — always one click back to the library overview,
+            // highlighted whenever that's the visible screen.
+            Button(action: onHome) {
+                HStack(spacing: Gap.s1) {
+                    Image(systemName: "house.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(isHome ? AppPalette.accent : AppPalette.mist.opacity(0.8))
+                        .frame(width: 30)
+                    Text("Home")
+                        .font(.system(size: 13, weight: isHome ? .semibold : .regular))
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, Gap.s1)
+                .padding(.vertical, 6)
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .background(
+                    isHome ? AppPalette.river.opacity(0.22) : .clear,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                )
+            }
+            .buttonStyle(.plain)
 
             Text("YOUR LIBRARY")
                 .font(.system(size: 10, weight: .bold, design: .rounded))
@@ -64,32 +88,37 @@ struct SidebarBookRow: View {
     let actions: BookActions
     @State private var isHovering = false
 
+    // The row button and the ⋯ menu are SIBLINGS, never nested — a Menu
+    // inside a Button makes AppKit swallow row clicks unpredictably.
     var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: Gap.s1) {
-                BookCover(book: book, compact: true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(book.title)
-                        .font(.system(size: 13))
-                        .lineLimit(1)
-                    Text(isQueued ? "Queued" : book.status.title)
-                        .font(.system(size: 11))
-                        .foregroundStyle(isQueued ? AppPalette.river : AppPalette.mist.opacity(0.66))
+        HStack(spacing: 0) {
+            Button(action: onSelect) {
+                HStack(spacing: Gap.s1) {
+                    BookCover(book: book, compact: true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(book.title)
+                            .font(.system(size: 13))
+                            .lineLimit(1)
+                        Text(isQueued ? "Queued" : book.status.title)
+                            .font(.system(size: 11))
+                            .foregroundStyle(isQueued ? AppPalette.river : AppPalette.mist.opacity(0.66))
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
-                BookActionsMenu(book: book, actions: actions, isQueued: isQueued)
-                    .opacity(isHovering || isSelected ? 1 : 0.45)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, Gap.s1)
-            .padding(.vertical, 5)
-            .background(
-                isSelected
-                    ? AppPalette.river.opacity(0.22)
-                    : (isHovering ? AppPalette.frost.opacity(0.06) : .clear),
-                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-            )
+            .buttonStyle(.plain)
+            BookActionsMenu(book: book, actions: actions, isQueued: isQueued)
+                .opacity(isHovering || isSelected ? 1 : 0.45)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, Gap.s1)
+        .padding(.vertical, 5)
+        .background(
+            isSelected
+                ? AppPalette.river.opacity(0.22)
+                : (isHovering ? AppPalette.frost.opacity(0.06) : .clear),
+            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+        )
         .onHover { isHovering = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovering)
     }

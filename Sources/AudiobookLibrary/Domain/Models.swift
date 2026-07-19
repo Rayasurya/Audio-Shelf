@@ -95,6 +95,10 @@ struct Audiobook: Codable, Identifiable, Equatable, Sendable {
     var voice: String?
     // nil = faithful.
     var narrationStyle: NarrationStyle?
+    // Listener's content preferences in their own words ("remove anything
+    // outside the story", "skip gore"). A local model removes matching
+    // sentences chapter-by-chapter before narration; empty/nil = narrate all.
+    var contentPreferences: String?
 
     // The chapters narration actually voices — excluded sections keep their
     // text for reading but never reach the narration provider or the player
@@ -148,6 +152,7 @@ struct GenerationProgress: Equatable, Sendable {
 // BookStatus — books say what they are; the job says what's being done.
 enum GenerationPhase: String, Equatable, Sendable {
     case preparing
+    case cleaning
     case retelling
     case narrating
     case packaging
@@ -155,6 +160,7 @@ enum GenerationPhase: String, Equatable, Sendable {
     var title: String {
         switch self {
         case .preparing: "Preparing"
+        case .cleaning: "Cleaning"
         case .retelling: "Retelling"
         case .narrating: "Narrating"
         case .packaging: "Packaging"

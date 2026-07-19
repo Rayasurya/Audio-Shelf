@@ -7,6 +7,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.llmClassify) private var classifyOnImport = true
     @AppStorage(SettingsKey.llmEndpoint) private var llmEndpointPath = ""
     @AppStorage(SettingsKey.autoFocusOnPlay) private var autoFocus = false
+    @AppStorage(SettingsKey.fastLLMEndpoint) private var fastEndpoint = ""
+    @AppStorage(SettingsKey.fastLLMModel) private var fastModel = ""
     @State private var checks: [EnvironmentCheck] = []
     @State private var rules: [TextRule] = []
     @State private var llmStatus: LLMStatus?
@@ -133,6 +135,11 @@ struct SettingsView: View {
                 Button("Check server") {
                     Task { llmStatus = await checkLLMStatus() }
                 }
+                TextField("Fast model server", text: $fastEndpoint, prompt: Text(defaultFastLLMEndpoint))
+                TextField("Fast model name", text: $fastModel, prompt: Text(defaultFastLLMModel))
+                Text("The fast model handles sentence-level work like content preferences — a small model (Llama 3.2 3B via Ollama by default) that sweeps whole books quickly. Falls back to the main server when it isn't running.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Narration workflows") {

@@ -8,9 +8,14 @@ struct GenerationView: View {
     let onReturnToLibrary: () -> Void
 
     private var phases: [GenerationPhase] {
-        book.narrationStyle == .easier
-            ? [.retelling, .narrating, .packaging]
-            : [.narrating, .packaging]
+        var list: [GenerationPhase] = []
+        if book.contentPreferences?.isEmpty == false, book.narrationStyle != .easier {
+            list.append(.cleaning)
+        }
+        if book.narrationStyle == .easier {
+            list.append(.retelling)
+        }
+        return list + [.narrating, .packaging]
     }
 
     private var currentPhase: GenerationPhase { job?.phase ?? .preparing }
@@ -18,7 +23,7 @@ struct GenerationView: View {
     // Narration is the only phase with real per-chapter fractions; the
     // others show activity, not a pretend percentage.
     private var isDeterminate: Bool {
-        currentPhase == .narrating || currentPhase == .retelling
+        currentPhase == .narrating || currentPhase == .retelling || currentPhase == .cleaning
     }
 
     var body: some View {

@@ -162,15 +162,45 @@ final class AppStore {
 
         Task { [repository] in
             do {
+                var book = generatingBook
+                // Content preferences: the fast local model removes matching
+                // sentences chapter-by-chapter (cached in narrationText). For
+                // easier-retelling books the preferences ride inside the
+                // retell prompt instead, so the text passes through once.
+                if let preferences = book.contentPreferences?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !preferences.isEmpty, book.narrationStyle != .easier {
+                    let narrated = book.narratedChapters
+                    for (position, chapter) in narrated.enumerated() where chapter.narrationText == nil {
+                        if control.isStopRequested { throw GenerationError.stopped }
+                        updateJob(phase: .cleaning, completed: position, total: narrated.count, title: chapter.title)
+                        guard let cleaned = await cleanChapterWithPreferences(bookTitle: book.title, chapter: chapter, preferences: preferences) else {
+                            throw GenerationError.workerFailed(
+                                status: 0,
+                                diagnostics: "Content preferences need a local model, and none answered. Start Ollama (ollama serve) or LM Studio's server, or clear the preferences in review."
+                            )
+                        }
+                        book.chapters = book.chapters.map { existing in
+                            guard existing.id == chapter.id else { return existing }
+                            var updated = existing
+                            updated.narrationText = cleaned
+                            return updated
+                        }
+                        dispatch(.updateBook(book))
+                    }
+                    if control.isStopRequested { throw GenerationError.stopped }
+                }
                 // Easier-retelling style: rewrite chapters through the local
                 // model first (cached — resuming skips finished rewrites).
-                var book = generatingBook
                 if book.narrationStyle == .easier {
                     let narrated = book.narratedChapters
                     for (position, chapter) in narrated.enumerated() where chapter.narrationText == nil {
                         if control.isStopRequested { throw GenerationError.stopped }
                         updateJob(phase: .retelling, completed: position, total: narrated.count, title: chapter.title)
-                        guard let rewritten = await rewriteChapterForEasierListening(bookTitle: book.title, chapter: chapter) else {
+                        guard let rewritten = await rewriteChapterForEasierListening(
+                            bookTitle: book.title,
+                            chapter: chapter,
+                            preferences: book.contentPreferences?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        ) else {
                             throw GenerationError.workerFailed(
                                 status: 0,
                                 diagnostics: "The easier-retelling style needs the local model server, and it did not answer. Start it (LM Studio: lms server start) or switch the book back to Faithful in review."

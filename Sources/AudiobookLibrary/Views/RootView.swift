@@ -48,13 +48,19 @@ struct RootView: View {
             LibrarySidebar(
                 books: store.state.books,
                 selectedBookID: store.state.selectedBookID,
+                isHome: store.state.route == .library,
                 queuedIDs: Set(store.state.queue),
+                onHome: { store.dispatch(.navigate(.library)) },
                 onSelect: { bookID in
                     store.dispatch(.selectBook(bookID))
+                    // A book click opens the book itself; Home is the way back.
+                    guard let selected = book(bookID, from: store.state.books) else { return }
                     if store.activeGenerationBookID == bookID {
                         store.dispatch(.navigate(.generation(bookID)))
+                    } else if selected.status == .readyToListen {
+                        store.openPlayer(bookID: bookID)
                     } else {
-                        store.dispatch(.navigate(.library))
+                        store.dispatch(.navigate(.preparation(bookID)))
                     }
                 },
                 onImport: store.chooseAndImport,

@@ -13,6 +13,8 @@ enum SettingsKey {
     static let playbackRate = "preferredPlaybackRate"
     static let autoFocusOnPlay = "autoFocusOnPlay"
     static let skipCategories = "playbackSkipCategories"
+    static let fastLLMEndpoint = "fastLLMEndpoint"
+    static let fastLLMModel = "fastLLMModel"
 }
 
 func preferredPlaybackRate() -> Float {

@@ -12,6 +12,7 @@ struct PreparationView: View {
     @State private var outputMode: OutputMode
     @State private var voice: String
     @State private var narrationStyle: NarrationStyle
+    @State private var contentPreferences: String
 
     init(book: Audiobook, onBack: @escaping () -> Void, onGenerate: @escaping (Audiobook) -> Void) {
         self.book = book
@@ -24,6 +25,7 @@ struct PreparationView: View {
         _outputMode = State(initialValue: book.outputMode ?? .audiobook)
         _voice = State(initialValue: book.voice ?? selectedNarrationVoice())
         _narrationStyle = State(initialValue: book.narrationStyle ?? .faithful)
+        _contentPreferences = State(initialValue: book.contentPreferences ?? "")
     }
 
     private var selectedChapterIndex: Int? {
@@ -94,6 +96,27 @@ struct PreparationView: View {
                         .pickerStyle(.segmented)
                         .labelsHidden()
                         Text(narrationStyle.blurb)
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundStyle(AppPalette.mist.opacity(0.6))
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("CONTENT PREFERENCES")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .tracking(1)
+                            .foregroundStyle(AppPalette.mist.opacity(0.60))
+                        TextField(
+                            "Content preferences",
+                            text: $contentPreferences,
+                            prompt: Text("e.g. remove anything outside the story — prices, ads, translator asides"),
+                            axis: .vertical
+                        )
+                        .textFieldStyle(.plain)
+                        .lineLimit(2 ... 4)
+                        .padding(8)
+                        .background(AppPalette.ink2, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .overlay { RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(AppPalette.hairline, lineWidth: 0.5) }
+                        Text("A small local model sweeps each chapter and removes matching sentences before narration. Leave empty to narrate everything.")
                             .font(.system(size: 11, design: .rounded))
                             .foregroundStyle(AppPalette.mist.opacity(0.6))
                     }
@@ -175,8 +198,10 @@ struct PreparationView: View {
         }
         reviewedBook.outputMode = outputMode
         reviewedBook.voice = voice
-        // A style change invalidates cached retellings.
-        if reviewedBook.narrationStyle != narrationStyle {
+        // A style or preference change invalidates cached rewritten text.
+        let trimmedPreferences = contentPreferences.trimmingCharacters(in: .whitespacesAndNewlines)
+        if reviewedBook.narrationStyle != narrationStyle
+            || (reviewedBook.contentPreferences ?? "") != trimmedPreferences {
             reviewedBook.chapters = reviewedBook.chapters.map { chapter in
                 var cleared = chapter
                 cleared.narrationText = nil
@@ -184,6 +209,7 @@ struct PreparationView: View {
             }
         }
         reviewedBook.narrationStyle = narrationStyle
+        reviewedBook.contentPreferences = trimmedPreferences.isEmpty ? nil : trimmedPreferences
         onGenerate(reviewedBook)
     }
 }

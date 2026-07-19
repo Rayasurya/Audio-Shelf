@@ -108,6 +108,36 @@ func renderGenerationFlowStates() throws {
 
 @Test(.enabled(if: snapshotsEnabled))
 @MainActor
+func renderSidebarSnapshot() throws {
+    let (book, _) = sampleBook()
+    var second = book
+    second = Audiobook(
+        id: UUID(), title: "A Second Book on the Pile", author: "B. Author",
+        sourceURL: book.sourceURL, chapters: book.chapters, status: .readyForReview,
+        generatedURL: nil, playbackSeconds: 0, lastOpenedAt: nil, createdAt: Date(), failureMessage: nil
+    )
+    let actions = BookActions(
+        onPlay: { _ in }, onReview: { _ in }, onProgress: { _ in }, onResume: { _ in },
+        onRegenerate: { _ in }, onDetails: { _ in }, onExport: { _ in }, onRevealFiles: { _ in }, onRemove: { _ in }
+    )
+    try renderSnapshot(
+        LibrarySidebar(
+            books: [book, second],
+            selectedBookID: book.id,
+            isHome: true,
+            queuedIDs: [second.id],
+            onHome: {},
+            onSelect: { _ in },
+            onImport: {},
+            actions: actions
+        ),
+        size: CGSize(width: 252, height: 480),
+        name: "sidebar-home"
+    )
+}
+
+@Test(.enabled(if: snapshotsEnabled))
+@MainActor
 func renderPlayerSnapshots() throws {
     let (book, timings) = sampleBook()
     try renderSnapshot(
