@@ -123,10 +123,8 @@ func renderSidebarSnapshot() throws {
     try renderSnapshot(
         LibrarySidebar(
             books: [book, second],
-            selectedBookID: book.id,
-            isHome: true,
+            selection: .home,
             queuedIDs: [second.id],
-            onHome: {},
             onSelect: { _ in },
             onImport: {},
             actions: actions

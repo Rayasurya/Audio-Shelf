@@ -19,23 +19,31 @@ struct LLMStatus: Equatable {
     let modelName: String?
 }
 
-func checkLLMStatus() async -> LLMStatus {
-    guard let url = URL(string: llmEndpoint() + "/models") else {
-        return LLMStatus(isReachable: false, modelName: nil)
-    }
+// Lists chat-capable model ids an OpenAI-compatible server offers; nil when
+// the server doesn't answer.
+func fetchAvailableModels(endpoint: String) async -> [String]? {
+    guard let url = URL(string: endpoint + "/models") else { return nil }
     var request = URLRequest(url: url)
     request.timeoutInterval = 3
-    do {
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let models = payload?["data"] as? [[String: Any]] ?? []
-        let chatModel = models
-            .compactMap { $0["id"] as? String }
-            .first { !$0.localizedCaseInsensitiveContains("embed") }
-        return LLMStatus(isReachable: true, modelName: chatModel)
-    } catch {
+    guard let (data, _) = try? await URLSession.shared.data(for: request),
+          let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let models = payload["data"] as? [[String: Any]]
+    else { return nil }
+    return models
+        .compactMap { $0["id"] as? String }
+        .filter { !$0.localizedCaseInsensitiveContains("embed") }
+}
+
+func checkLLMStatus() async -> LLMStatus {
+    guard let models = await fetchAvailableModels(endpoint: llmEndpoint()) else {
         return LLMStatus(isReachable: false, modelName: nil)
     }
+    // The user's chosen model wins when the server still offers it.
+    if let chosen = settingsString(SettingsKey.llmModel),
+       models.contains(where: { $0 == chosen }) {
+        return LLMStatus(isReachable: true, modelName: chosen)
+    }
+    return LLMStatus(isReachable: true, modelName: models.first)
 }
 
 // The "fast model": a small local model (Llama 3.2 3B via Ollama by default)

@@ -27,7 +27,7 @@ struct GenerationView: View {
     }
 
     var body: some View {
-        VStack(spacing: Gap.s4) {
+        VStack(spacing: 16) {
             BookCover(book: book, compact: false)
             VStack(spacing: 6) {
                 Text("Making your audiobook")
@@ -92,7 +92,7 @@ struct GenerationView: View {
                 .font(.caption)
                 .foregroundStyle(AppPalette.mist.opacity(0.55))
         }
-        .padding(Gap.s4)
+        .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppPalette.ink)
         .foregroundStyle(AppPalette.frost)

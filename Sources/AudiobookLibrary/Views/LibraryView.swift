@@ -1,126 +1,86 @@
 import SwiftUI
 
+// What the sidebar can select: fixed destinations plus every book.
+enum SidebarItem: Hashable {
+    case home
+    case models
+    case book(UUID)
+}
+
+// Native sectioned sidebar (system List = system density, hover, selection,
+// vibrancy) — the structure proven by TypeWhisper's shell, written fresh.
 struct LibrarySidebar: View {
     let books: [Audiobook]
-    let selectedBookID: UUID?
-    let isHome: Bool
+    let selection: SidebarItem?
     let queuedIDs: Set<UUID>
-    let onHome: () -> Void
-    let onSelect: (UUID) -> Void
+    let onSelect: (SidebarItem) -> Void
     let onImport: () -> Void
     let actions: BookActions
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            HStack(spacing: 10) {
-                Image(systemName: "waveform.book.closed.fill")
-                    .foregroundStyle(AppPalette.accent)
-                Text("Audio Shelf")
-                    .font(.system(size: 15, weight: .bold))
+        List(selection: Binding(
+            get: { selection },
+            set: { newValue in if let newValue { onSelect(newValue) } }
+        )) {
+            Section {
+                Label("Home", systemImage: "house")
+                    .tag(SidebarItem.home)
+                Label("Models", systemImage: "cpu")
+                    .tag(SidebarItem.models)
             }
-            .padding(.top, 12)
-
-            Button(action: onImport) {
-                Label("Import a book", systemImage: "plus")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(PrimaryButtonStyle())
-
-            // Persistent Home — always one click back to the library overview,
-            // highlighted whenever that's the visible screen.
-            Button(action: onHome) {
-                HStack(spacing: Gap.s1) {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(isHome ? AppPalette.accent : AppPalette.mist.opacity(0.8))
-                        .frame(width: 30)
-                    Text("Home")
-                        .font(.system(size: 13, weight: isHome ? .semibold : .regular))
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, Gap.s1)
-                .padding(.vertical, 6)
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .background(
-                    isHome ? AppPalette.river.opacity(0.22) : .clear,
-                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-                )
-            }
-            .buttonStyle(.plain)
-
-            Text("YOUR LIBRARY")
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .tracking(1.1)
-                .foregroundStyle(AppPalette.mist.opacity(0.72))
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(books) { book in
-                        SidebarBookRow(
-                            book: book,
-                            isSelected: selectedBookID == book.id,
-                            isQueued: queuedIDs.contains(book.id),
-                            onSelect: { onSelect(book.id) },
-                            actions: actions
-                        )
-                    }
+            Section("Your Library") {
+                ForEach(books) { book in
+                    SidebarBookRow(
+                        book: book,
+                        isQueued: queuedIDs.contains(book.id),
+                        actions: actions
+                    )
+                    .tag(SidebarItem.book(book.id))
                 }
             }
-            Spacer(minLength: 0)
-            Text("Local-only narration")
-                .font(.caption2)
-                .foregroundStyle(AppPalette.mist.opacity(0.60))
         }
-        .padding(18)
-        .foregroundStyle(AppPalette.frost)
-        .background(AppPalette.sea)
+        .listStyle(.sidebar)
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 6) {
+                Button(action: onImport) {
+                    Label("Import a book", systemImage: "plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                Text("Local-only narration")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, Gap.s2)
+            .padding(.vertical, Gap.s1)
+        }
     }
 }
 
 // Sidebar row on native proportions: 13pt text, quiet hover, subtle selection;
 // the ⋯ stays visible (discoverability beat progressive disclosure here) but
 // brightens on hover.
+// A row inside the native sidebar List: the List owns selection, hover, and
+// click handling; the ⋯ menu rides as trailing content.
 struct SidebarBookRow: View {
     let book: Audiobook
-    let isSelected: Bool
     var isQueued: Bool = false
-    let onSelect: () -> Void
     let actions: BookActions
-    @State private var isHovering = false
 
-    // The row button and the ⋯ menu are SIBLINGS, never nested — a Menu
-    // inside a Button makes AppKit swallow row clicks unpredictably.
     var body: some View {
-        HStack(spacing: 0) {
-            Button(action: onSelect) {
-                HStack(spacing: Gap.s1) {
-                    BookCover(book: book, compact: true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(book.title)
-                            .font(.system(size: 13))
-                            .lineLimit(1)
-                        Text(isQueued ? "Queued" : book.status.title)
-                            .font(.system(size: 11))
-                            .foregroundStyle(isQueued ? AppPalette.river : AppPalette.mist.opacity(0.66))
-                    }
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
+        HStack(spacing: Gap.s1) {
+            BookCover(book: book, compact: true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(book.title)
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                Text(isQueued ? "Queued" : book.status.title)
+                    .font(.system(size: 11))
+                    .foregroundStyle(isQueued ? AppPalette.river : .secondary)
             }
-            .buttonStyle(.plain)
+            Spacer(minLength: 0)
             BookActionsMenu(book: book, actions: actions, isQueued: isQueued)
-                .opacity(isHovering || isSelected ? 1 : 0.45)
         }
-        .padding(.horizontal, Gap.s1)
-        .padding(.vertical, 5)
-        .background(
-            isSelected
-                ? AppPalette.river.opacity(0.22)
-                : (isHovering ? AppPalette.frost.opacity(0.06) : .clear),
-            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-        )
-        .onHover { isHovering = $0 }
-        .animation(.easeOut(duration: 0.15), value: isHovering)
     }
 }
 
@@ -144,7 +104,7 @@ struct LibraryView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Gap.s4) {
+            VStack(alignment: .leading, spacing: 18) {
                 ForEach(environmentChecks.filter { !$0.isReady }) { check in
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -220,7 +180,7 @@ struct LibraryView: View {
                                 .font(.caption)
                                 .foregroundStyle(AppPalette.mist.opacity(0.7))
                         }
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 180, maximum: 220), spacing: 16)], spacing: 16) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 156, maximum: 200), spacing: 12)], spacing: 12) {
                             ForEach(books) { book in
                                 BookCard(book: book, actions: actions)
                             }
@@ -228,7 +188,7 @@ struct LibraryView: View {
                     }
                 }
             }
-            .padding(Gap.s4)
+            .padding(20)
         }
         .background(AppPalette.ink)
         .foregroundStyle(AppPalette.frost)
@@ -266,8 +226,8 @@ struct ListeningRail: View {
 
     var body: some View {
         AppSurface {
-            HStack(spacing: 28) {
-                BookCover(book: book, compact: false)
+            HStack(spacing: 18) {
+                BookCover(book: book, compact: false, width: 96, height: 134)
                 VStack(alignment: .leading, spacing: 13) {
                     HStack {
                         Text(book.status == .readyToListen ? "READY ON YOUR SHELF" : "CURRENTLY IN THE WORKROOM")
@@ -278,7 +238,7 @@ struct ListeningRail: View {
                         BookActionsMenu(book: book, actions: actions)
                     }
                     Text(book.title)
-                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .font(.system(size: 22, weight: .bold, design: .serif))
                         .lineLimit(2)
                     Text(book.author)
                         .font(.system(size: 14, design: .rounded))
@@ -325,7 +285,7 @@ struct ListeningRail: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(26)
+            .padding(16)
         }
     }
 }
@@ -353,7 +313,7 @@ struct EmptyLibraryView: View {
                 }
                 Spacer()
             }
-            .padding(28)
+            .padding(20)
         }
     }
 }
@@ -362,6 +322,14 @@ struct BookCard: View {
     let book: Audiobook
     let actions: BookActions
     @State private var isHovering = false
+
+    private var cardMeta: String {
+        var parts = ["\(book.chapters.count) chapters"]
+        let seconds = book.chapters.compactMap(\.duration).reduce(0, +)
+        if seconds > 0 { parts.append(formatDuration(seconds)) }
+        if let bytes = book.generationRecord?.audioBytes { parts.append(formatBytes(bytes)) }
+        return parts.joined(separator: " · ")
+    }
 
     private var cardActionIcon: String {
         switch book.status {
@@ -387,6 +355,10 @@ struct BookCard: View {
                 .font(.system(size: 11))
                 .foregroundStyle(AppPalette.mist.opacity(0.68))
                 .lineLimit(1)
+            Text(cardMeta)
+                .font(.system(size: 10).monospacedDigit())
+                .foregroundStyle(AppPalette.mist.opacity(0.5))
+                .lineLimit(1)
             HStack {
                 StatusPill(status: book.status)
                 Spacer()
@@ -405,7 +377,7 @@ struct BookCard: View {
                 .background(AppPalette.frost.opacity(0.10), in: Circle())
             }
         }
-        .padding(Gap.s2)
+        .padding(10)
         .background(
             isHovering ? AppPalette.ink2 : AppPalette.ink1,
             in: RoundedRectangle(cornerRadius: 8, style: .continuous)

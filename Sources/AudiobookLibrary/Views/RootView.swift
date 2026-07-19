@@ -47,20 +47,25 @@ struct RootView: View {
         NavigationSplitView {
             LibrarySidebar(
                 books: store.state.books,
-                selectedBookID: store.state.selectedBookID,
-                isHome: store.state.route == .library,
+                selection: sidebarSelection(for: store.state.route),
                 queuedIDs: Set(store.state.queue),
-                onHome: { store.dispatch(.navigate(.library)) },
-                onSelect: { bookID in
-                    store.dispatch(.selectBook(bookID))
-                    // A book click opens the book itself; Home is the way back.
-                    guard let selected = book(bookID, from: store.state.books) else { return }
-                    if store.activeGenerationBookID == bookID {
-                        store.dispatch(.navigate(.generation(bookID)))
-                    } else if selected.status == .readyToListen {
-                        store.openPlayer(bookID: bookID)
-                    } else {
-                        store.dispatch(.navigate(.preparation(bookID)))
+                onSelect: { item in
+                    switch item {
+                    case .home:
+                        store.dispatch(.navigate(.library))
+                    case .models:
+                        store.dispatch(.navigate(.models))
+                    case let .book(bookID):
+                        store.dispatch(.selectBook(bookID))
+                        // A book click opens the book itself; Home is the way back.
+                        guard let selected = book(bookID, from: store.state.books) else { return }
+                        if store.activeGenerationBookID == bookID {
+                            store.dispatch(.navigate(.generation(bookID)))
+                        } else if selected.status == .readyToListen {
+                            store.openPlayer(bookID: bookID)
+                        } else {
+                            store.dispatch(.navigate(.preparation(bookID)))
+                        }
                     }
                 },
                 onImport: store.chooseAndImport,
@@ -123,9 +128,19 @@ struct RootView: View {
         }
     }
 
+    private func sidebarSelection(for route: AppRoute) -> SidebarItem? {
+        switch route {
+        case .library: .home
+        case .models: .models
+        case let .preparation(bookID), let .generation(bookID), let .player(bookID): .book(bookID)
+        }
+    }
+
     @ViewBuilder
     private func routeView(store: AppStore) -> some View {
         switch store.state.route {
+        case .models:
+            ModelsView()
         case .library:
             LibraryView(
                 books: store.state.books,

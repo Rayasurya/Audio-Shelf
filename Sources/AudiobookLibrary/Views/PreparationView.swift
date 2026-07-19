@@ -167,16 +167,16 @@ struct PreparationView: View {
                             }
                     }
                 }
-                .padding(26)
+                .padding(18)
                 }
-                .frame(width: 310)
+                .frame(width: 300)
                 .background(AppPalette.sea)
 
                 Divider().overlay(AppPalette.mist.opacity(0.16))
 
                 if let selectedChapterIndex {
                     ChapterEditor(chapter: $draftChapters[selectedChapterIndex])
-                        .padding(30)
+                        .padding(20)
                 } else {
                     ContentUnavailableView("No chapter selected", systemImage: "text.book.closed")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

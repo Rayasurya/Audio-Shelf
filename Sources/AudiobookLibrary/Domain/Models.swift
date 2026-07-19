@@ -207,6 +207,7 @@ struct GenerationRecord: Codable, Equatable, Sendable {
 
 enum AppRoute: Equatable, Sendable {
     case library
+    case models
     case preparation(UUID)
     case generation(UUID)
     case player(UUID)

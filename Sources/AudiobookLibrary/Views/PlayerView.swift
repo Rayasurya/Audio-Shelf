@@ -75,11 +75,11 @@ struct PlayerView: View {
                 }
                 Spacer()
             }
-            .frame(width: 290)
-            .padding(28)
+            .frame(width: 250)
+            .padding(20)
             .background(AppPalette.sea)
 
-            VStack(spacing: 30) {
+            VStack(spacing: 20) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 7) {
                         Text(currentChapter?.title.uppercased() ?? "BEGINNING")
@@ -174,8 +174,8 @@ struct PlayerView: View {
                     LyricsFlowView(book: book, timings: timings, currentSeconds: currentSeconds, onSeek: onSeek, onRegenerate: onRegenerate)
                 }
             }
-            .padding(.horizontal, 46)
-            .padding(.vertical, 34)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 22)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .foregroundStyle(AppPalette.frost)

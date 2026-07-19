@@ -15,6 +15,7 @@ enum SettingsKey {
     static let skipCategories = "playbackSkipCategories"
     static let fastLLMEndpoint = "fastLLMEndpoint"
     static let fastLLMModel = "fastLLMModel"
+    static let llmModel = "llmModel"
 }
 
 func preferredPlaybackRate() -> Float {
