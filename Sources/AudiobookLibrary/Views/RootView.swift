@@ -85,10 +85,19 @@ struct RootView: View {
             ),
             titleVisibility: .visible
         ) {
-            Button("Remove book and its audio", role: .destructive) { store.confirmRemoval() }
+            Button(
+                store.activeGenerationBookID == store.removalCandidateID
+                    ? "Stop narration and remove"
+                    : "Remove book and its audio",
+                role: .destructive
+            ) { store.confirmRemoval() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This deletes the generated audio, podcast episodes, and the imported copy from Audio Shelf. Your original file is not touched.")
+            Text(
+                store.activeGenerationBookID == store.removalCandidateID
+                    ? "Narration stops immediately, then the generated audio, episodes, and imported copy are deleted. Your original file is not touched."
+                    : "This deletes the generated audio, podcast episodes, and the imported copy from Audio Shelf. Your original file is not touched."
+            )
         }
         .confirmationDialog(
             "\(store.duplicateImportCandidate?.lastPathComponent ?? "This book") is already on your shelf.",

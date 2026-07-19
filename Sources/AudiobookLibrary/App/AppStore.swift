@@ -12,6 +12,7 @@ final class AppStore {
     private(set) var repository: LibraryRepository?
     private(set) var currentTimings: BookTimings?
     private var generationControl: GenerationControl?
+    private var generationTask: Task<Void, Never>?
     private(set) var isStoppingJob = false
     var isFocusMode = false
 
@@ -160,7 +161,7 @@ final class AppStore {
             startedAt: Date()
         )))
 
-        Task { [repository] in
+        generationTask = Task { [repository] in
             do {
                 var book = generatingBook
                 // Content preferences: the fast local model removes matching
@@ -258,13 +259,22 @@ final class AppStore {
                 startNextInQueue()
             } catch {
                 generationControl = nil
+                generationTask = nil
                 let completed = state.activeJob?.completedChapters ?? 0
                 let total = state.activeJob?.totalChapters ?? 0
-                if control.isStopRequested || (error as? GenerationError).map({ if case .stopped = $0 { true } else { false } }) == true {
-                    dispatch(.generationStopped(
-                        bookID: bookID,
-                        message: "Narration stopped — \(completed) of \(total) chapters narrated. Resume anytime."
-                    ))
+                let wasStopped = control.isStopRequested
+                    || error is CancellationError
+                    || (error as? GenerationError).map({ if case .stopped = $0 { true } else { false } }) == true
+                if wasStopped {
+                    // A removed book gets no paused note — it's gone.
+                    if state.books.contains(where: { $0.id == bookID }) {
+                        dispatch(.generationStopped(
+                            bookID: bookID,
+                            message: "Narration stopped — \(completed) of \(total) chapters narrated. Resume anytime."
+                        ))
+                    } else {
+                        dispatch(.generationStopped(bookID: bookID, message: ""))
+                    }
                 } else {
                     dispatch(.generationFailed(bookID: bookID, message: error.localizedDescription))
                 }
@@ -283,12 +293,14 @@ final class AppStore {
         dispatch(.jobUpdated(job))
     }
 
-    // Graceful stop: the worker finishes its current chunk, saves, and exits;
-    // completed chapters stay on disk and resume is free.
+    // Stop now: SIGINT immediately (worker saves its chunk), SIGTERM after a
+    // 3-second grace, and Swift-task cancellation so an in-flight LLM request
+    // aborts instantly instead of running out its timeout.
     func stopGeneration() {
         guard state.activeJob != nil, let control = generationControl else { return }
         isStoppingJob = true
         control.requestStop()
+        generationTask?.cancel()
     }
 
     // Best-effort synchronous stop for app termination: request the stop and
@@ -353,16 +365,18 @@ final class AppStore {
     var removalCandidateID: UUID?
 
     func requestRemoval(bookID: UUID) {
-        guard activeGenerationBookID != bookID else {
-            dispatch(.importFailed("This book is being narrated right now. Wait for it to finish before removing it."))
-            return
-        }
         removalCandidateID = bookID
     }
 
     func confirmRemoval() {
         guard let bookID = removalCandidateID else { return }
         removalCandidateID = nil
+        // Removing the book being narrated kills its job outright — nothing
+        // worth saving from a book that's about to be deleted.
+        if activeGenerationBookID == bookID {
+            generationControl?.forceKill()
+            generationTask?.cancel()
+        }
         if case .player(bookID) = state.route { stopPlayer() }
         if let repository {
             try? FileManager.default.removeItem(at: repository.bookDirectory(bookID: bookID))

@@ -300,13 +300,16 @@ func reduce(state: AppState, action: AppAction) -> AppState {
         next.queue.removeAll { $0 == job.bookID }
         return next
     case let .jobUpdated(job):
+        // Progress events arrive async from worker pipes; one landing after a
+        // stop (or after the next job started) must not resurrect or clobber.
+        guard state.activeJob?.bookID == job.bookID else { return state }
         var next = state
         next.activeJob = job
         return next
     case let .generationFinished(book):
         var next = state
         next.books = state.books.map { $0.id == book.id ? book : $0 }
-        next.activeJob = nil
+        if state.activeJob?.bookID == book.id { next.activeJob = nil }
         // Only steal the screen when the user is watching this book being
         // made; someone browsing another book keeps their place.
         if case .generation(book.id) = state.route {
@@ -322,7 +325,7 @@ func reduce(state: AppState, action: AppAction) -> AppState {
             failedBook.failureMessage = message
             return failedBook
         }
-        next.activeJob = nil
+        if state.activeJob?.bookID == bookID { next.activeJob = nil }
         next.alertMessage = message
         return next
     case let .generationStopped(bookID, message):
@@ -334,7 +337,7 @@ func reduce(state: AppState, action: AppAction) -> AppState {
             pausedBook.failureMessage = message
             return pausedBook
         }
-        next.activeJob = nil
+        if state.activeJob?.bookID == bookID { next.activeJob = nil }
         // A stopped job's screen has nothing left to show — land on the hero,
         // which now offers Resume.
         if case .generation(bookID) = state.route {

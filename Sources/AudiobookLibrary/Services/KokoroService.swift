@@ -64,9 +64,33 @@ final class GenerationControl: @unchecked Sendable {
 
     func requestStop() {
         lock.lock()
-        defer { lock.unlock() }
         stopRequested = true
-        process?.interrupt()
+        let running = process
+        lock.unlock()
+        // Graceful first (worker saves its current chunk on SIGINT), but the
+        // listener asked to stop NOW — escalate to SIGTERM if the worker is
+        // still alive after a short grace. Fingerprints protect finished
+        // chapters either way.
+        running?.interrupt()
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak self] in
+            self?.killIfStillRunning()
+        }
+    }
+
+    // Immediate termination — for removal, where nothing needs saving.
+    func forceKill() {
+        lock.lock()
+        stopRequested = true
+        let running = process
+        lock.unlock()
+        running?.terminate()
+    }
+
+    private func killIfStillRunning() {
+        lock.lock()
+        let running = process
+        lock.unlock()
+        if let running, running.isRunning { running.terminate() }
     }
 
     var isStopRequested: Bool {
